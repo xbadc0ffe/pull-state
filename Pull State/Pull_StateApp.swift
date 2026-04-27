@@ -1,32 +1,26 @@
-//
-//  Pull_StateApp.swift
-//  Pull State
-//
-//  Created by Robert Morris on 4/26/26.
-//
-
 import SwiftUI
 import SwiftData
 
 @main
 struct Pull_StateApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    let container: ModelContainer
 
+    init() {
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            let schema = Schema([
+                Shot.self, Bean.self, Equipment.self, AppSettings.self
+            ])
+            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+            container = try ModelContainer(for: schema, configurations: [config])
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
-    }()
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(container)
     }
 }

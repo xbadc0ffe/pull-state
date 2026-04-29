@@ -5,16 +5,8 @@ struct OnbHardwareStep: View {
     @Binding var grinder: OnbHardwareEntry
     @Environment(\.psPalette) private var palette
 
-    private let machineSuggestions = [
-        "Linea Mini", "Linea Micra", "GS3", "Bambino Plus", "Silvia Pro",
-        "Profitec Pro 600", "Lelit Bianca", "Rancilio Silvia", "ECM Synchronika",
-        "Rocket Appartamento", "Decent DE1+", "Flair 58", "Breville Dual Boiler"
-    ]
-    private let grinderSuggestions = [
-        "Niche Zero", "Niche Duo", "DF64", "DF83", "Mahlkönig X54", "Mahlkönig E80",
-        "Eureka Mignon Specialita", "Eureka Atom 75", "Lagom P64", "Weber Key",
-        "Baratza Sette 270", "Fellow Ode"
-    ]
+    private var machineNames: [String] { HardwareCatalog.machines.map(\.name) }
+    private var grinderNames: [String] { HardwareCatalog.grinders.map(\.name) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -31,8 +23,13 @@ struct OnbHardwareStep: View {
                 OnbCombobox(label: "Name",
                             text: $machine.name,
                             placeholder: "Search or type a model…",
-                            options: machineSuggestions)
-                OnbField(label: "Brand", text: $machine.brand, placeholder: "e.g. La Marzocco")
+                            options: machineNames,
+                            onSelect: { picked in
+                                if let brand = HardwareCatalog.brand(forName: picked, kind: .machine) {
+                                    machine.brand = brand
+                                }
+                            })
+                OnbField(label: "Brand", text: $machine.brand, placeholder: "e.g. Flair Espresso")
             }
 
             Rectangle().fill(palette.line).frame(height: 1)
@@ -42,8 +39,13 @@ struct OnbHardwareStep: View {
                 OnbCombobox(label: "Name",
                             text: $grinder.name,
                             placeholder: "Search or type a model…",
-                            options: grinderSuggestions)
-                OnbField(label: "Brand", text: $grinder.brand, placeholder: "e.g. Niche")
+                            options: grinderNames,
+                            onSelect: { picked in
+                                if let brand = HardwareCatalog.brand(forName: picked, kind: .grinder) {
+                                    grinder.brand = brand
+                                }
+                            })
+                OnbField(label: "Brand", text: $grinder.brand, placeholder: "e.g. 1Zpresso")
             }
         }
     }
@@ -77,6 +79,7 @@ struct OnbCombobox: View {
     @Binding var text: String
     var placeholder: String = ""
     let options: [String]
+    var onSelect: ((String) -> Void)? = nil
 
     @Environment(\.psPalette) private var palette
     @State private var open = false
@@ -139,6 +142,7 @@ struct OnbCombobox: View {
                                     let active = opt == text
                                     Button {
                                         text = opt
+                                        onSelect?(opt)
                                         open = false
                                         focused = false
                                     } label: {

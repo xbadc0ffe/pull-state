@@ -14,6 +14,7 @@ final class Bean {
     var purchaseDate: Date
     var notes: String
     var createdAt: Date
+    @Attribute(.externalStorage) var photoData: Data?
 
     private var recipeData: Data?
 
@@ -31,7 +32,8 @@ final class Bean {
         roastDate: Date = .now,
         purchaseDate: Date = .now,
         notes: String = "",
-        recipe: Recipe = .default,
+        recipe: Recipe = Recipe(),
+        photoData: Data? = nil,
         createdAt: Date = .now
     ) {
         self.name = name
@@ -44,6 +46,7 @@ final class Bean {
         self.roastDate = roastDate
         self.purchaseDate = purchaseDate
         self.notes = notes
+        self.photoData = photoData
         self.createdAt = createdAt
         self.recipe = recipe
     }
@@ -66,7 +69,7 @@ final class Bean {
         get {
             guard let recipeData,
                   let decoded = try? JSONDecoder().decode(Recipe.self, from: recipeData)
-            else { return .default }
+            else { return Recipe() }
             return decoded
         }
         set {

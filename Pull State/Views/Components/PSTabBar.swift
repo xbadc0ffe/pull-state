@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 enum PSTab: String, CaseIterable, Identifiable {
     case log, history, beans, hardware
@@ -11,9 +14,18 @@ enum PSTab: String, CaseIterable, Identifiable {
         case .log:      return "doc.text"
         case .history:  return "clock.arrow.circlepath"
         case .beans:    return ""
-        case .hardware: return "wrench.and.screwdriver"
+        case .hardware: return Self.hardwareSymbol
         }
     }
+
+    private static let hardwareSymbol: String = {
+        #if canImport(UIKit)
+        if UIImage(systemName: "espresso.machine") != nil {
+            return "espresso.machine"
+        }
+        #endif
+        return "cup.and.saucer.fill"
+    }()
 }
 
 struct BeanIcon: View {
@@ -21,28 +33,44 @@ struct BeanIcon: View {
 
     var body: some View {
         Canvas { ctx, size in
+            let baseR = min(size.width, size.height) / 2
+            let beanR = baseR * 0.42
             let cx = size.width / 2, cy = size.height / 2
-            let r = min(size.width, size.height) / 2 * 0.78
-            ctx.translateBy(x: cx, y: cy)
-            ctx.rotate(by: .degrees(-22))
-            ctx.translateBy(x: -cx, y: -cy)
 
-            let oval = Path(ellipseIn: CGRect(
-                x: cx - r, y: cy - r * 0.7,
-                width: r * 2, height: r * 1.4
-            ))
-            ctx.stroke(oval, with: .color(color),
-                       style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+            // Three beans in a loose cluster:
+            // center, upper-left, lower-right
+            let placements: [(CGPoint, Double)] = [
+                (CGPoint(x: cx,                     y: cy),                     -22),
+                (CGPoint(x: cx - baseR * 0.45,      y: cy - baseR * 0.45),       18),
+                (CGPoint(x: cx + baseR * 0.45,      y: cy + baseR * 0.45),      -52)
+            ]
 
-            var seam = Path()
-            seam.move(to: CGPoint(x: cx - r * 0.85, y: cy + r * 0.35))
-            seam.addQuadCurve(
-                to: CGPoint(x: cx + r * 0.85, y: cy - r * 0.35),
-                control: CGPoint(x: cx, y: cy)
-            )
-            ctx.stroke(seam, with: .color(color),
-                       style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+            for (center, angle) in placements {
+                ctx.drawLayer { layer in
+                    layer.translateBy(x: center.x, y: center.y)
+                    layer.rotate(by: .degrees(angle))
+                    drawBean(in: layer, radius: beanR, color: color)
+                }
+            }
         }
+    }
+
+    private func drawBean(in ctx: GraphicsContext, radius r: CGFloat, color: Color) {
+        let oval = Path(ellipseIn: CGRect(
+            x: -r, y: -r * 0.7,
+            width: r * 2, height: r * 1.4
+        ))
+        ctx.stroke(oval, with: .color(color),
+                   style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
+
+        var seam = Path()
+        seam.move(to: CGPoint(x: -r * 0.85, y: r * 0.35))
+        seam.addQuadCurve(
+            to: CGPoint(x: r * 0.85, y: -r * 0.35),
+            control: .zero
+        )
+        ctx.stroke(seam, with: .color(color),
+                   style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
     }
 }
 

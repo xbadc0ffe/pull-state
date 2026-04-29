@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnbWelcomeStep: View {
     @Binding var appearance: AppearanceMode
+    @Binding var temperatureUnit: TemperatureUnit
     @Environment(\.psPalette) private var palette
 
     var body: some View {
@@ -63,6 +64,22 @@ struct OnbWelcomeStep: View {
                     .strokeBorder(palette.line, lineWidth: 0.5)
             )
             .padding(.top, 30)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("TEMPERATURE UNIT")
+                    .font(PSFont.mono(12, weight: .bold))
+                    .tracking(1.4)
+                    .foregroundStyle(palette.inkSoft)
+                TempUnitSwitch(unit: $temperatureUnit)
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(palette.line, lineWidth: 0.5)
+            )
+            .padding(.top, 14)
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("APPEARANCE")

@@ -1,13 +1,16 @@
 import SwiftUI
 import SwiftData
 import Combine
-import PhotosUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct LogScreen: View {
     let onShowAbout: () -> Void
 
     @Environment(\.modelContext) private var context
     @Environment(\.psPalette) private var palette
+    @Environment(\.psTempUnit) private var tempUnit
 
     @Query(sort: \Equipment.createdAt, order: .reverse) private var allEquipment: [Equipment]
     @Query(sort: \Bean.createdAt, order: .reverse) private var beans: [Bean]
@@ -26,7 +29,6 @@ struct LogScreen: View {
     @State private var rating: Int = 0
     @State private var notes: String = ""
     @State private var photoData: Data? = nil
-    @State private var photoSelection: PhotosPickerItem? = nil
     @State private var shotDate: Date = .now
 
     @State private var tState: TimerState = .idle
@@ -36,6 +38,9 @@ struct LogScreen: View {
     @State private var pullEnd: Double? = nil
     @State private var startInstant: Date? = nil
     @State private var savedFlash: Bool = false
+    @State private var showRecipeSheet: Bool = false
+    @State private var saveRecipePromptBean: Bean? = nil
+    @State private var saveRecipePromptValues: SaveRecipeValues? = nil
 
     private var machines: [Equipment] { allEquipment.filter { $0.kind == .machine } }
     private var grinders: [Equipment] { allEquipment.filter { $0.kind == .grinder } }
@@ -86,6 +91,10 @@ struct LogScreen: View {
                 .padding(.bottom, 14)
             }
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(
+                TapGesture().onEnded { dismissKeyboard() }
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -97,17 +106,40 @@ struct LogScreen: View {
         .onChange(of: beanID) { _, _ in
             preloadFromBean()
         }
-        .onChange(of: photoSelection) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self) {
-                    await MainActor.run { photoData = data }
-                }
-            }
-        }
         .onReceive(Timer.publish(every: 0.067, on: .main, in: .common).autoconnect()) { now in
             guard tState == .running, let startInstant else { return }
             elapsed = now.timeIntervalSince(startInstant)
+        }
+        .sheet(isPresented: $showRecipeSheet) {
+            if let bean = selectedBean {
+                RecipeSheet(bean: bean, onClose: { showRecipeSheet = false })
+                    .environment(\.psPalette, palette)
+                    .environment(\.psTempUnit, tempUnit)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(palette.surface)
+            }
+        }
+        .alert(
+            "Save as recipe for \(saveRecipePromptBean?.name ?? "this bean")?",
+            isPresented: Binding(
+                get: { saveRecipePromptBean != nil && saveRecipePromptValues != nil },
+                set: { if !$0 { saveRecipePromptBean = nil; saveRecipePromptValues = nil } }
+            )
+        ) {
+            Button("Save Recipe") {
+                if let bean = saveRecipePromptBean, let v = saveRecipePromptValues {
+                    saveRecipeFromShot(v, into: bean)
+                }
+                saveRecipePromptBean = nil
+                saveRecipePromptValues = nil
+            }
+            Button("Skip", role: .cancel) {
+                saveRecipePromptBean = nil
+                saveRecipePromptValues = nil
+            }
+        } message: {
+            Text("Update this bean's recipe with the values from this shot?")
         }
     }
 
@@ -160,6 +192,23 @@ struct LogScreen: View {
                         )
                     }
                 }
+                if selectedBean != nil {
+                    Button { showRecipeSheet = true } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "list.bullet.rectangle")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("View Recipe")
+                                .font(PSFont.body(12, weight: .semibold))
+                        }
+                        .foregroundStyle(palette.accentDeep)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(palette.accentSoft, in: Capsule())
+                        .overlay(Capsule().strokeBorder(palette.accent, lineWidth: 0.5))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 4)
+                }
             }
         }
     }
@@ -177,29 +226,37 @@ struct LogScreen: View {
                         phase: phase,
                         done: tState == .done,
                         editable: tState != .running,
+                        preInfTarget: selectedBean?.recipe.preInfTime,
+                        pullTarget: selectedBean?.recipe.pullTime,
                         onManualPre: { setManualPre($0) },
                         onManualPull: { setManualPull($0) }
                     )
                     if tState != .done {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             TimerBtn(label: "START", primary: tState == .idle, disabled: tState != .idle, action: startTimer)
+                                .aspectRatio(1, contentMode: .fit)
+                                .frame(minWidth: 64, minHeight: 64)
                             TimerBtn(label: "FIRST DRIP", primary: tState == .running && phase == .pre, disabled: !(tState == .running && phase == .pre), action: firstDrip)
+                                .aspectRatio(1, contentMode: .fit)
+                                .frame(minWidth: 64, minHeight: 64)
                             TimerBtn(label: "DONE", primary: tState == .running && phase == .pull, disabled: tState != .running, action: doneTimer)
+                                .aspectRatio(1, contentMode: .fit)
+                                .frame(minWidth: 64, minHeight: 64)
                         }
                     } else {
                         Button(action: resetTimer) {
                             HStack(spacing: 8) {
                                 Image(systemName: "arrow.counterclockwise")
                                 Text("RESET TIMER")
-                                    .font(PSFont.mono(12, weight: .bold))
+                                    .font(PSFont.mono(13, weight: .bold))
                                     .tracking(1.4)
                             }
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                            .padding(.vertical, 18)
                             .foregroundStyle(palette.ink)
-                            .background(palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .background(palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .strokeBorder(palette.lineStrong, lineWidth: 0.5)
                             )
                         }
@@ -217,10 +274,17 @@ struct LogScreen: View {
             PSSectionLabel("Settings").padding(.leading, 4)
             PSCard {
                 VStack(spacing: 0) {
-                    SliderField(label: "Dose / Weight In", value: $dose, range: 10...25, step: 0.1, unit: "g", decimals: 1)
-                    SliderField(label: "Yield / Weight Out", value: $yieldG, range: 15...60, step: 0.1, unit: "g", decimals: 1)
-                    SliderField(label: "Water Temp", value: $waterTemp, range: 85...100, step: 1, unit: "°C", decimals: 0)
-                    SliderField(label: "Pressure", value: $pressure, range: 6...12, step: 0.5, unit: "bar", decimals: 1, last: true)
+                    SliderField(label: "Dose / Weight In", value: $dose, range: 7...25, step: 0.1, unit: "g", decimals: 1)
+                    SliderField(label: "Yield / Weight Out", value: $yieldG, range: 7...75, step: 0.1, unit: "g", decimals: 1)
+                    SliderField(
+                        label: "Water Temp",
+                        value: tempBinding(celsius: $waterTemp),
+                        range: tempRange,
+                        step: tempStep,
+                        unit: tempUnit.label,
+                        decimals: tempUnit == .celsius ? 1 : 0
+                    )
+                    SliderField(label: "Pressure", value: $pressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1, last: true)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 4)
@@ -233,6 +297,19 @@ struct LogScreen: View {
                     .padding(.leading, 4)
             }
         }
+    }
+
+    private var tempRange: ClosedRange<Double> {
+        tempUnit == .celsius ? 70...105 : 158...221
+    }
+    private var tempStep: Double {
+        tempUnit == .celsius ? 0.5 : 1
+    }
+    private func tempBinding(celsius: Binding<Double>) -> Binding<Double> {
+        Binding(
+            get: { tempUnit.display(celsius: celsius.wrappedValue) },
+            set: { celsius.wrappedValue = tempUnit.toCelsius($0) }
+        )
     }
 
     @ViewBuilder
@@ -263,7 +340,7 @@ struct LogScreen: View {
             FlowLayout(spacing: 6) {
                 ForEach(TastingTag.allCases) { tag in
                     PSPill(
-                        label: tag.rawValue,
+                        label: tag.label,
                         active: tags.contains(tag),
                         action: {
                             if tags.contains(tag) { tags.remove(tag) } else { tags.insert(tag) }
@@ -326,7 +403,6 @@ struct LogScreen: View {
                         if photoData != nil {
                             Button {
                                 photoData = nil
-                                photoSelection = nil
                             } label: {
                                 Image(systemName: "xmark")
                                     .font(.system(size: 12, weight: .bold))
@@ -338,7 +414,7 @@ struct LogScreen: View {
                             .buttonStyle(.plain)
                             .accessibilityLabel("Remove photo")
                         }
-                        PhotosPicker(selection: $photoSelection, matching: .images, photoLibrary: .shared()) {
+                        PSPhotoSourceMenu(data: $photoData) {
                             HStack(spacing: 6) {
                                 Image(systemName: "camera")
                                     .font(.system(size: 12, weight: .regular))
@@ -351,7 +427,6 @@ struct LogScreen: View {
                             .background(photoData == nil ? palette.surface : palette.accent, in: Capsule())
                             .overlay(Capsule().strokeBorder(palette.line, lineWidth: 0.5))
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 14)
@@ -431,13 +506,28 @@ struct LogScreen: View {
         }
     }
 
+    private func beanHasMissingRecipeFields(_ bean: Bean) -> Bool {
+        let r = bean.recipe
+        return r.dose == nil || r.yield == nil || r.temp == nil || r.pullPressure == nil
+    }
+
+    private func saveRecipeFromShot(_ values: SaveRecipeValues, into bean: Bean) {
+        var r = bean.recipe
+        if r.dose == nil { r.dose = values.dose }
+        if r.yield == nil { r.yield = values.yield }
+        if r.temp == nil { r.temp = values.temp }
+        if r.pullPressure == nil { r.pullPressure = values.pressure }
+        bean.recipe = r
+        try? context.save()
+    }
+
     private func preloadFromBean() {
         guard let bean = selectedBean, bean.persistentModelID != lastLoadedBeanID else { return }
         let r = bean.recipe
-        dose = r.dose
-        yieldG = r.yield
-        waterTemp = r.temp
-        pressure = r.pullPressure
+        if let d = r.dose { dose = d }
+        if let y = r.yield { yieldG = y }
+        if let t = r.temp { waterTemp = t }
+        if let p = r.pullPressure { pressure = p }
         lastLoadedBeanID = bean.persistentModelID
     }
 
@@ -485,16 +575,19 @@ struct LogScreen: View {
 
     private func save() {
         guard canSave else { return }
+        let bean = selectedBean
+        let values = SaveRecipeValues(dose: dose, yield: yieldG, temp: waterTemp, pressure: pressure)
+
         let shot = Shot(
             date: shotDate,
-            bean: selectedBean,
+            bean: bean,
             machine: selectedMachine,
             grinder: selectedGrinder,
-            grindSetting: selectedBean?.recipe.grind ?? "",
-            dose: dose,
-            yield: yieldG,
-            waterTemp: waterTemp,
-            pressure: pressure,
+            grindSetting: bean?.recipe.grind ?? "",
+            dose: values.dose,
+            yield: values.yield,
+            waterTemp: values.temp,
+            pressure: values.pressure,
             preInfusion: preEnd ?? 0,
             pull: (pullEnd ?? 0) - (preEnd ?? 0),
             extraction: extraction,
@@ -506,13 +599,17 @@ struct LogScreen: View {
         context.insert(shot)
         try? context.save()
 
+        if let bean, beanHasMissingRecipeFields(bean) {
+            saveRecipePromptBean = bean
+            saveRecipePromptValues = values
+        }
+
         resetTimer()
         rating = 0
         extraction = nil
         tags = []
         notes = ""
         photoData = nil
-        photoSelection = nil
         shotDate = .now
 
         savedFlash = true
@@ -525,3 +622,20 @@ struct LogScreen: View {
 
 enum TimerState { case idle, running, done }
 enum TimerPhase { case pre, pull }
+
+struct SaveRecipeValues: Equatable {
+    let dose: Double
+    let yield: Double
+    let temp: Double
+    let pressure: Double
+}
+
+@MainActor
+private func dismissKeyboard() {
+    #if canImport(UIKit)
+    UIApplication.shared.sendAction(
+        #selector(UIResponder.resignFirstResponder),
+        to: nil, from: nil, for: nil
+    )
+    #endif
+}

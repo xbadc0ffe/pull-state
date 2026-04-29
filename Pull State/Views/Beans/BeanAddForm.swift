@@ -19,7 +19,8 @@ struct BeanAddForm: View {
     @State private var roastDate: Date = .now
     @State private var purchaseDate: Date = .now
     @State private var notes = ""
-    @State private var recipe: Recipe = .default
+    @State private var recipe: Recipe = Recipe()
+    @State private var photoData: Data? = nil
 
     private var nextBag: Int { settings.nextBagNumber }
 
@@ -40,7 +41,7 @@ struct BeanAddForm: View {
                 }
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 18) {
                         Text("BAG #\(nextBag) · AUTO")
                             .font(PSFont.mono(11, weight: .bold))
                             .tracking(0.8)
@@ -82,24 +83,28 @@ struct BeanAddForm: View {
                         }
 
                         labelGroup("Process") {
-                            FlowLayout(spacing: 6) {
-                                ForEach(BeanProcess.allCases) { p in
-                                    PSPill(
-                                        label: p.rawValue,
-                                        active: process == p,
-                                        horizontalPadding: 12,
-                                        verticalPadding: 9,
-                                        action: { process = p }
-                                    )
-                                }
-                            }
-                            if process == .other {
-                                PSCard {
-                                    PSField(label: "Specify process", last: true) {
-                                        PSTextInput(text: $processOther, placeholder: "e.g. Anaerobic", alignment: .trailing)
+                            VStack(alignment: .leading, spacing: 8) {
+                                FlowLayout(spacing: 6, lineSpacing: 8) {
+                                    ForEach(BeanProcess.allCases) { p in
+                                        PSPill(
+                                            label: p.rawValue,
+                                            active: process == p,
+                                            horizontalPadding: 12,
+                                            verticalPadding: 10,
+                                            action: {
+                                                withAnimation(.easeInOut(duration: 0.2)) { process = p }
+                                            }
+                                        )
                                     }
                                 }
-                                .padding(.top, 6)
+                                if process == .other {
+                                    PSCard {
+                                        PSField(label: "Specify process", last: true) {
+                                            PSTextInput(text: $processOther, placeholder: "e.g. Anaerobic", alignment: .trailing)
+                                        }
+                                    }
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
                             }
                         }
 
@@ -138,25 +143,7 @@ struct BeanAddForm: View {
                         }
 
                         labelGroup("Photo") {
-                            PSCard {
-                                HStack(spacing: 12) {
-                                    PSPlaceholder(label: "ADD", radius: 10)
-                                        .frame(width: 56, height: 56)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text("Add a photo")
-                                            .font(PSFont.body(13, weight: .semibold))
-                                            .foregroundStyle(palette.ink)
-                                        Text("Helps you spot the bag in your shelf")
-                                            .font(PSFont.body(11))
-                                            .foregroundStyle(palette.inkSoft)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "camera")
-                                        .font(.system(size: 22))
-                                        .foregroundStyle(palette.accent)
-                                }
-                                .padding(14)
-                            }
+                            PhotoEditCard(data: $photoData, hint: "Helps you spot the bag in your shelf")
                         }
 
                         labelGroup("Notes") {
@@ -214,7 +201,8 @@ struct BeanAddForm: View {
             roastDate: roastDate,
             purchaseDate: purchaseDate,
             notes: notes,
-            recipe: recipe
+            recipe: recipe,
+            photoData: photoData
         )
         context.insert(bean)
         settings.nextBagNumber = nextBag + 1

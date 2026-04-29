@@ -12,7 +12,7 @@ struct BeanDetailView: View {
     private var bean: Bean? { beans.first { $0.persistentModelID == beanID } }
 
     @State private var editing = false
-    @State private var draft: Recipe = .default
+    @State private var draft: Recipe = Recipe()
     @State private var showDeleteConfirm = false
 
     @State private var dName = ""
@@ -24,6 +24,7 @@ struct BeanDetailView: View {
     @State private var dRoastDate: Date = .now
     @State private var dPurchaseDate: Date = .now
     @State private var dNotes: String = ""
+    @State private var dPhotoData: Data? = nil
 
     var body: some View {
         ZStack {
@@ -96,9 +97,7 @@ struct BeanDetailView: View {
     private func contentBody(for bean: Bean) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                PSPlaceholder(label: "BAG PHOTO", radius: 14)
-                    .frame(maxWidth: .infinity)
-                    .aspectRatio(4.0/3.0, contentMode: .fit)
+                bagPhoto(for: bean)
                     .padding(.bottom, 14)
 
                 if editing {
@@ -111,6 +110,25 @@ struct BeanDetailView: View {
             .padding(.bottom, 30)
         }
         .scrollIndicators(.hidden)
+    }
+
+    @ViewBuilder
+    private func bagPhoto(for bean: Bean) -> some View {
+        let display: Data? = editing ? dPhotoData : bean.photoData
+        Group {
+            #if canImport(UIKit)
+            if let data = display, let img = UIImage(data: data) {
+                Image(uiImage: img).resizable().scaledToFill()
+            } else {
+                PSPlaceholder(label: "BAG PHOTO", radius: 14)
+            }
+            #else
+            PSPlaceholder(label: "BAG PHOTO", radius: 14)
+            #endif
+        }
+        .frame(maxWidth: .infinity)
+        .aspectRatio(4.0/3.0, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     @ViewBuilder
@@ -272,18 +290,28 @@ struct BeanDetailView: View {
         }
 
         section("Process") {
-            FlowLayout(spacing: 6) {
-                ForEach(BeanProcess.allCases) { p in
-                    PSPill(label: p.rawValue, active: dProcess == p, horizontalPadding: 12, verticalPadding: 9, action: { dProcess = p })
-                }
-            }
-            if dProcess == .other {
-                PSCard {
-                    PSField(label: "Specify", last: true) {
-                        PSTextInput(text: $dProcessOther, placeholder: "e.g. Anaerobic")
+            VStack(alignment: .leading, spacing: 8) {
+                FlowLayout(spacing: 6, lineSpacing: 8) {
+                    ForEach(BeanProcess.allCases) { p in
+                        PSPill(
+                            label: p.rawValue,
+                            active: dProcess == p,
+                            horizontalPadding: 12,
+                            verticalPadding: 10,
+                            action: {
+                                withAnimation(.easeInOut(duration: 0.2)) { dProcess = p }
+                            }
+                        )
                     }
                 }
-                .padding(.top, 6)
+                if dProcess == .other {
+                    PSCard {
+                        PSField(label: "Specify", last: true) {
+                            PSTextInput(text: $dProcessOther, placeholder: "e.g. Anaerobic")
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
         }
 
@@ -311,6 +339,10 @@ struct BeanDetailView: View {
                     }
                 }
             }
+        }
+
+        section("Photo") {
+            PhotoEditCard(data: $dPhotoData, hint: "Snap the bag so it's easy to spot.")
         }
 
         section("Notes") {
@@ -389,6 +421,7 @@ struct BeanDetailView: View {
         dRoastDate = bean.roastDate
         dPurchaseDate = bean.purchaseDate
         dNotes = bean.notes
+        dPhotoData = bean.photoData
     }
 
     private func commitEdit(into bean: Bean) {
@@ -401,6 +434,7 @@ struct BeanDetailView: View {
         bean.roastDate = dRoastDate
         bean.purchaseDate = dPurchaseDate
         bean.notes = dNotes
+        bean.photoData = dPhotoData
         try? context.save()
     }
 }

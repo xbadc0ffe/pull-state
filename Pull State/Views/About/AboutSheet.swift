@@ -28,15 +28,11 @@ struct AboutSheet: View {
 
                 // Header
                 VStack(spacing: 10) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(LinearGradient(colors: [palette.accent, palette.accentDeep],
-                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 72, height: 72)
-                            .psShadow(strong: true)
-                        AppLogo(deepColor: palette.accentDeep)
-                            .frame(width: 38, height: 38)
-                    }
+                    Image("badc0ffe-logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 160)
+                        .padding(.vertical, 6)
                     PSDisplay("Pull State", size: 26)
                     Text("v 1.0.0 · APR 26 2026")
                         .font(PSFont.mono(11))
@@ -59,11 +55,20 @@ struct AboutSheet: View {
                                 .minimumScaleFactor(0.8)
                         }
                         PSField(label: "GitHub") {
-                            Text("github.com/xbadc0ffe/pull-state")
-                                .font(PSFont.mono(13, weight: .semibold))
-                                .foregroundStyle(palette.accent)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.65)
+                            Link(destination: URL(string: "https://github.com/xbadc0ffe/pull-state")!) {
+                                Text("github.com/xbadc0ffe/pull-state")
+                                    .font(PSFont.mono(13, weight: .semibold))
+                                    .foregroundStyle(palette.accent)
+                                    .underline()
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.65)
+                            }
+                        }
+                        PSField(label: "Temperature") {
+                            TempUnitSwitch(unit: Binding(
+                                get: { settings.temperatureUnit },
+                                set: { settings.temperatureUnit = $0 }
+                            ))
                         }
                         PSField(label: "Appearance", last: true) {
                             ModeSwitch(appearance: Binding(
@@ -165,47 +170,9 @@ struct AboutSheet: View {
         .background(palette.surface)
         .task {
             await store.loadProductIfNeeded()
-        }
-    }
-}
-
-private struct AppLogo: View {
-    let deepColor: Color
-
-    var body: some View {
-        Canvas { ctx, size in
-            // Cup top rim
-            let topRim = Path { p in
-                let w = size.width, h = size.height
-                p.move(to: CGPoint(x: 0.292 * w, y: 0.208 * h))
-                p.addLine(to: CGPoint(x: 0.708 * w, y: 0.208 * h))
-                p.addLine(to: CGPoint(x: 0.667 * w, y: 0.333 * h))
-                p.addLine(to: CGPoint(x: 0.333 * w, y: 0.333 * h))
-                p.closeSubpath()
+            if !settings.hasTipped, await store.hasPriorEntitlement() {
+                settings.hasTipped = true
             }
-            ctx.fill(topRim, with: .color(.white.opacity(0.95)))
-
-            // Cup body
-            let body = Path { p in
-                let w = size.width, h = size.height
-                p.move(to: CGPoint(x: 0.333 * w, y: 0.333 * h))
-                p.addLine(to: CGPoint(x: 0.667 * w, y: 0.333 * h))
-                p.addLine(to: CGPoint(x: 0.625 * w, y: 0.708 * h))
-                p.addQuadCurve(to: CGPoint(x: 0.542 * w, y: 0.792 * h), control: CGPoint(x: 0.625 * w, y: 0.792 * h))
-                p.addLine(to: CGPoint(x: 0.458 * w, y: 0.792 * h))
-                p.addQuadCurve(to: CGPoint(x: 0.375 * w, y: 0.708 * h), control: CGPoint(x: 0.375 * w, y: 0.792 * h))
-                p.closeSubpath()
-            }
-            ctx.fill(body, with: .color(.white.opacity(0.85)))
-
-            // Crema dot
-            let dot = Path(ellipseIn: CGRect(
-                x: size.width * 0.5 - size.width * 0.073,
-                y: size.height * 0.542 - size.height * 0.073,
-                width: size.width * 0.146,
-                height: size.width * 0.146
-            ))
-            ctx.fill(dot, with: .color(deepColor))
         }
     }
 }
@@ -227,6 +194,34 @@ struct ModeSwitch: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(appearance == mode ? AnyShapeStyle(palette.accent) : AnyShapeStyle(Color.clear),
+                                    in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(palette.surfaceAlt, in: Capsule())
+        .overlay(Capsule().strokeBorder(palette.lineStrong, lineWidth: 0.5))
+    }
+}
+
+struct TempUnitSwitch: View {
+    @Binding var unit: TemperatureUnit
+    @Environment(\.psPalette) private var palette
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(TemperatureUnit.allCases) { u in
+                Button {
+                    unit = u
+                } label: {
+                    Text(u.pickerLabel)
+                        .font(PSFont.body(11, weight: .bold))
+                        .tracking(0.4)
+                        .foregroundStyle(unit == u ? Color.white : palette.inkSoft)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(unit == u ? AnyShapeStyle(palette.accent) : AnyShapeStyle(Color.clear),
                                     in: Capsule())
                 }
                 .buttonStyle(.plain)

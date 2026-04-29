@@ -1,6 +1,10 @@
 import Foundation
 import StoreKit
 
+// Local development reminder: in Xcode, set
+// Run → Options → StoreKit Configuration → PullState.storekit
+// so the tip product loads from Resources/PullState.storekit
+// without needing a live App Store Connect entry.
 @Observable
 @MainActor
 final class StoreManager {
@@ -10,6 +14,10 @@ final class StoreManager {
     var purchaseInFlight = false
     var purchaseError: String?
 
+    init() {
+        Task { await loadProductIfNeeded() }
+    }
+
     func loadProductIfNeeded() async {
         guard product == nil else { return }
         do {
@@ -18,6 +26,15 @@ final class StoreManager {
         } catch {
             purchaseError = "Couldn't load tip product."
         }
+    }
+
+    func hasPriorEntitlement() async -> Bool {
+        for await result in Transaction.currentEntitlements {
+            if case .verified(let txn) = result, txn.productID == Self.tipProductID {
+                return true
+            }
+        }
+        return false
     }
 
     func purchase() async -> Bool {

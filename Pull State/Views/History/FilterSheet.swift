@@ -7,6 +7,7 @@ struct FilterSheet: View {
     @Binding var filterBeanID: PersistentIdentifier?
     @Binding var filterMachineID: PersistentIdentifier?
     @Binding var filterGrinderID: PersistentIdentifier?
+    @Binding var filterTags: Set<TastingTag>
 
     let beans: [Bean]
     let machines: [Equipment]
@@ -45,6 +46,23 @@ struct FilterSheet: View {
                                 action: { filterEx = (filterEx == ex) ? nil : ex }
                             )
                             .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .padding(.bottom, 14)
+
+                    PSSectionLabel("Tasting notes").padding(.leading, 4).padding(.bottom, 8)
+                    FlowLayout(spacing: 6, lineSpacing: 8) {
+                        ForEach(TastingTag.allCases) { tag in
+                            PSPill(
+                                label: tag.label,
+                                active: filterTags.contains(tag),
+                                horizontalPadding: 10,
+                                verticalPadding: 8,
+                                fontSize: 12,
+                                action: {
+                                    if filterTags.contains(tag) { filterTags.remove(tag) } else { filterTags.insert(tag) }
+                                }
+                            )
                         }
                     }
                     .padding(.bottom, 14)
@@ -108,6 +126,7 @@ struct FilterSheet: View {
                             filterBeanID = nil
                             filterMachineID = nil
                             filterGrinderID = nil
+                            filterTags = []
                         } label: {
                             Text("Clear all")
                                 .font(PSFont.body(13, weight: .semibold))

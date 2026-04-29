@@ -59,9 +59,11 @@ struct MainTabView: View {
             .modifier(HideNavBar())
         }
         .environment(\.psPalette, palette)
+        .environment(\.psTempUnit, settings.temperatureUnit)
         .sheet(isPresented: $showAbout) {
             AboutSheet(settings: settings)
                 .environment(\.psPalette, palette)
+                .environment(\.psTempUnit, settings.temperatureUnit)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(palette.surface)
@@ -69,11 +71,13 @@ struct MainTabView: View {
         .sheet(isPresented: $showAddBean) {
             BeanAddForm(settings: settings, onCancel: { showAddBean = false }, onSaved: { showAddBean = false })
                 .environment(\.psPalette, palette)
+                .environment(\.psTempUnit, settings.temperatureUnit)
                 .presentationBackground(palette.page)
         }
         .sheet(item: $addHardwareKind) { kind in
             HardwareAddForm(kind: kind, onCancel: { addHardwareKind = nil }, onSaved: { addHardwareKind = nil })
                 .environment(\.psPalette, palette)
+                .environment(\.psTempUnit, settings.temperatureUnit)
                 .presentationBackground(palette.page)
         }
     }
@@ -89,16 +93,6 @@ struct HideNavBar: ViewModifier {
     func body(content: Content) -> some View {
         #if os(iOS)
         content.toolbar(.hidden, for: .navigationBar)
-        #else
-        content
-        #endif
-    }
-}
-
-struct HideBackButton: ViewModifier {
-    func body(content: Content) -> some View {
-        #if os(iOS)
-        content.navigationBarBackButtonHidden(true)
         #else
         content
         #endif

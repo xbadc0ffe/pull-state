@@ -20,7 +20,7 @@ struct RecipeBlock: View {
 
 private struct RecipeRow: View {
     let label: String
-    @Binding var text: String
+    @Binding var text: String?
     let unit: String
     let editing: Bool
     var placeholder: String = ""
@@ -35,16 +35,19 @@ private struct RecipeRow: View {
                     .foregroundStyle(palette.inkSoft)
                 Spacer()
                 if editing {
-                    TextField(placeholder, text: $text)
-                        .font(PSFont.mono(13.5, weight: .bold))
-                        .foregroundStyle(palette.ink)
-                        .multilineTextAlignment(.trailing)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .frame(width: 90)
-                        .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 6))
+                    TextField(placeholder, text: Binding(
+                        get: { text ?? "" },
+                        set: { text = $0.isEmpty ? nil : $0 }
+                    ))
+                    .font(PSFont.mono(13.5, weight: .bold))
+                    .foregroundStyle(palette.ink)
+                    .multilineTextAlignment(.trailing)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .frame(width: 90)
+                    .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 6))
                 } else {
-                    Text(text.isEmpty ? "—" : text)
+                    Text(text?.isEmpty == false ? text! : "—")
                         .font(PSFont.mono(13.5, weight: .semibold))
                         .foregroundStyle(palette.ink)
                 }
@@ -66,12 +69,11 @@ private struct RecipeRow: View {
 
 private struct RecipeNumberRow: View {
     let label: String
-    @Binding var value: Double
+    @Binding var value: Double?
     let unit: String
     let editing: Bool
     var last: Bool = false
     @Environment(\.psPalette) private var palette
-    @State private var draft: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -81,10 +83,13 @@ private struct RecipeNumberRow: View {
                     .foregroundStyle(palette.inkSoft)
                 Spacer()
                 if editing {
-                    TextField("", text: Binding(
-                        get: { formatted(value) },
+                    TextField("—", text: Binding(
+                        get: { value.map(formatted) ?? "" },
                         set: { newValue in
-                            if let n = Double(newValue.replacingOccurrences(of: ",", with: ".")) {
+                            let trimmed = newValue.trimmingCharacters(in: .whitespaces)
+                            if trimmed.isEmpty {
+                                value = nil
+                            } else if let n = Double(trimmed.replacingOccurrences(of: ",", with: ".")) {
                                 value = n
                             }
                         }
@@ -98,7 +103,7 @@ private struct RecipeNumberRow: View {
                     .frame(width: 90)
                     .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 6))
                 } else {
-                    Text(formatted(value))
+                    Text(value.map(formatted) ?? "—")
                         .font(PSFont.mono(13.5, weight: .semibold))
                         .foregroundStyle(palette.ink)
                 }

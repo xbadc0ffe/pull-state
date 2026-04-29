@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import PhotosUI
 
 struct ShotDetailView: View {
     let shotID: PersistentIdentifier
@@ -8,6 +7,7 @@ struct ShotDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.psPalette) private var palette
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.psTempUnit) private var tempUnit
 
     @Query private var shots: [Shot]
     @Query(sort: \Bean.bagNumber, order: .reverse) private var beans: [Bean]
@@ -33,7 +33,6 @@ struct ShotDetailView: View {
     @State private var dMachineID: PersistentIdentifier? = nil
     @State private var dGrinderID: PersistentIdentifier? = nil
     @State private var dPhotoData: Data? = nil
-    @State private var dPhotoSelection: PhotosPickerItem? = nil
 
     init(shotID: PersistentIdentifier) { self.shotID = shotID }
 
@@ -90,14 +89,6 @@ struct ShotDetailView: View {
             .psContentColumn()
         }
         .environment(\.psPalette, PSPalette.resolve(for: scheme))
-        .onChange(of: dPhotoSelection) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self) {
-                    await MainActor.run { dPhotoData = data }
-                }
-            }
-        }
         .alert("Delete this shot?", isPresented: $showDeleteConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
@@ -156,7 +147,7 @@ struct ShotDetailView: View {
                                 PSField(label: "Dose") { PSValueText(text: String(format: "%.1fg", shot.dose), fontSize: 13.5) }
                                 PSField(label: "Yield", suffix: String(format: "1:%.2f", shot.ratio)) { PSValueText(text: String(format: "%.1fg", shot.yield), fontSize: 13.5) }
                                 PSField(label: "Grind") { PSValueText(text: shot.grindSetting.isEmpty ? "—" : shot.grindSetting, fontSize: 13.5) }
-                                PSField(label: "Water") { PSValueText(text: "\(Int(shot.waterTemp))°C", fontSize: 13.5) }
+                                PSField(label: "Water") { PSValueText(text: formattedTemp(shot.waterTemp), fontSize: 13.5) }
                                 PSField(label: "Pressure", last: true) { PSValueText(text: "\(formattedPressure(shot.pressure)) bar", fontSize: 13.5) }
                             }
                         }
@@ -178,7 +169,7 @@ struct ShotDetailView: View {
                                 .foregroundStyle(palette.inkMuted)
                         } else {
                             FlowLayout(spacing: 6) {
-                                ForEach(shot.tags) { PSPill(label: $0.rawValue, active: true) }
+                                ForEach(shot.tags) { PSPill(label: $0.label, active: true) }
                             }
                         }
                     }
@@ -293,7 +284,7 @@ struct ShotDetailView: View {
             FlowLayout(spacing: 6) {
                 ForEach(TastingTag.allCases) { tag in
                     PSPill(
-                        label: tag.rawValue,
+                        label: tag.label,
                         active: dTags.contains(tag),
                         action: {
                             if dTags.contains(tag) { dTags.remove(tag) } else { dTags.insert(tag) }
@@ -309,10 +300,17 @@ struct ShotDetailView: View {
         section("Settings") {
             PSCard {
                 VStack(spacing: 0) {
-                    SliderField(label: "Dose", value: $dDose, range: 10...25, step: 0.1, unit: "g", decimals: 1)
-                    SliderField(label: "Yield", value: $dYield, range: 15...60, step: 0.1, unit: "g", decimals: 1)
-                    SliderField(label: "Water Temp", value: $dWaterTemp, range: 85...100, step: 1, unit: "°C", decimals: 0)
-                    SliderField(label: "Pressure", value: $dPressure, range: 6...12, step: 0.5, unit: "bar", decimals: 1)
+                    SliderField(label: "Dose", value: $dDose, range: 7...25, step: 0.1, unit: "g", decimals: 1)
+                    SliderField(label: "Yield", value: $dYield, range: 7...75, step: 0.1, unit: "g", decimals: 1)
+                    SliderField(
+                        label: "Water Temp",
+                        value: tempBinding(celsius: $dWaterTemp),
+                        range: tempUnit == .celsius ? 70...105 : 158...221,
+                        step: tempUnit == .celsius ? 0.5 : 1,
+                        unit: tempUnit.label,
+                        decimals: tempUnit == .celsius ? 1 : 0
+                    )
+                    SliderField(label: "Pressure", value: $dPressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
                     SliderField(label: "Pre-infusion", value: $dPre, range: 0...20, step: 0.1, unit: "s", decimals: 1)
                     SliderField(label: "Pull", value: $dPull, range: 0...60, step: 0.1, unit: "s", decimals: 1, last: true)
                 }
@@ -345,7 +343,6 @@ struct ShotDetailView: View {
                     if dPhotoData != nil {
                         Button {
                             dPhotoData = nil
-                            dPhotoSelection = nil
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 12, weight: .bold))
@@ -356,7 +353,7 @@ struct ShotDetailView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    PhotosPicker(selection: $dPhotoSelection, matching: .images, photoLibrary: .shared()) {
+                    PSPhotoSourceMenu(data: $dPhotoData) {
                         HStack(spacing: 6) {
                             Image(systemName: "camera")
                                 .font(.system(size: 12))
@@ -369,7 +366,6 @@ struct ShotDetailView: View {
                         .background(dPhotoData == nil ? palette.surface : palette.accent, in: Capsule())
                         .overlay(Capsule().strokeBorder(palette.line, lineWidth: 0.5))
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(14)
             }
@@ -442,7 +438,7 @@ struct ShotDetailView: View {
 
     @ViewBuilder
     private func section<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             PSSectionLabel(label).padding(.leading, 4)
             content()
         }
@@ -454,6 +450,21 @@ struct ShotDetailView: View {
 
     private func formattedPressure(_ p: Double) -> String {
         p == p.rounded() ? "\(Int(p))" : String(format: "%.1f", p)
+    }
+
+    private func formattedTemp(_ celsius: Double) -> String {
+        let v = tempUnit.display(celsius: celsius)
+        let s = tempUnit == .celsius
+            ? (v == v.rounded() ? "\(Int(v))" : String(format: "%.1f", v))
+            : "\(Int(v.rounded()))"
+        return "\(s)\(tempUnit.label)"
+    }
+
+    private func tempBinding(celsius: Binding<Double>) -> Binding<Double> {
+        Binding(
+            get: { tempUnit.display(celsius: celsius.wrappedValue) },
+            set: { celsius.wrappedValue = tempUnit.toCelsius($0) }
+        )
     }
 
     private func loadDraft(from shot: Shot) {
@@ -472,7 +483,6 @@ struct ShotDetailView: View {
         dMachineID = shot.machine?.persistentModelID
         dGrinderID = shot.grinder?.persistentModelID
         dPhotoData = shot.photoData
-        dPhotoSelection = nil
     }
 
     private func commitEdit(into shot: Shot) {

@@ -7,6 +7,8 @@ struct DualTrackTimer: View {
     let phase: TimerPhase
     let done: Bool
     let editable: Bool
+    let preInfTarget: Double?
+    let pullTarget: Double?
     let onManualPre: (Double) -> Void
     let onManualPull: (Double) -> Void
 
@@ -18,6 +20,15 @@ struct DualTrackTimer: View {
         if done { return "DONE" }
         if running { return phase == .pre ? "PRE-INFUSION" : "PULLING" }
         return "READY"
+    }
+
+    private var preTrackMax: Double {
+        if let t = preInfTarget, t > 0 { return t / 0.75 }
+        return 10
+    }
+    private var pullTrackMax: Double {
+        if let t = pullTarget, t > 0 { return t / 0.75 }
+        return 30
     }
 
     var body: some View {
@@ -57,17 +68,23 @@ struct DualTrackTimer: View {
             TimerTrack(
                 label: "PRE-INFUSION",
                 value: preInfusion,
-                fraction: min(preInfusion / 10, 1),
+                fraction: min(preInfusion / preTrackMax, 1),
                 active: running && phase == .pre,
                 editable: editable,
+                target: preInfTarget,
+                targetTolerance: 1,
+                trackMax: preTrackMax,
                 onCommit: onManualPre
             )
             TimerTrack(
                 label: "PULL",
                 value: pullTime,
-                fraction: min(pullTime / 30, 1),
+                fraction: min(pullTime / pullTrackMax, 1),
                 active: running && phase == .pull,
                 editable: editable,
+                target: pullTarget,
+                targetTolerance: 3,
+                trackMax: pullTrackMax,
                 onCommit: onManualPull
             )
         }
@@ -80,6 +97,9 @@ struct TimerTrack: View {
     let fraction: Double
     let active: Bool
     let editable: Bool
+    var target: Double? = nil
+    var targetTolerance: Double = 0
+    var trackMax: Double = 1
     let onCommit: (Double) -> Void
 
     @Environment(\.psPalette) private var palette
@@ -149,6 +169,14 @@ struct TimerTrack: View {
                     .frame(height: 8)
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(palette.line, lineWidth: 0.5))
                 GeometryReader { proxy in
+                    if let t = target, t > 0, trackMax > 0 {
+                        let lo = max(0, (t - targetTolerance) / trackMax)
+                        let hi = min(1, (t + targetTolerance) / trackMax)
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(palette.good.opacity(0.30))
+                            .frame(width: proxy.size.width * (hi - lo), height: 8)
+                            .offset(x: proxy.size.width * lo)
+                    }
                     RoundedRectangle(cornerRadius: 4)
                         .fill(LinearGradient(colors: [palette.accent, palette.accentDeep], startPoint: .leading, endPoint: .trailing))
                         .frame(width: proxy.size.width * fraction, height: 8)
@@ -177,17 +205,18 @@ struct TimerBtn: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(PSFont.mono(11, weight: .bold))
+                .font(PSFont.mono(12, weight: .bold))
                 .tracking(1)
+                .multilineTextAlignment(.center)
                 .foregroundStyle(primary ? Color.white : (disabled ? palette.inkMuted : palette.ink))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(8)
                 .background(
                     primary ? palette.accent : (disabled ? palette.surfaceAlt : palette.surface),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .strokeBorder(primary ? Color.clear : palette.line, lineWidth: 0.5)
                 )
                 .opacity(disabled ? 0.55 : 1)

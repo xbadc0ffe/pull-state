@@ -17,6 +17,7 @@ struct HistoryScreen: View {
     @State private var filterBeanID: PersistentIdentifier? = nil
     @State private var filterMachineID: PersistentIdentifier? = nil
     @State private var filterGrinderID: PersistentIdentifier? = nil
+    @State private var filterTags: Set<TastingTag> = []
     @State private var showFilter = false
     @State private var showSort = false
 
@@ -34,6 +35,12 @@ struct HistoryScreen: View {
         if let bid = filterBeanID { xs = xs.filter { $0.bean?.persistentModelID == bid } }
         if let mid = filterMachineID { xs = xs.filter { $0.machine?.persistentModelID == mid } }
         if let gid = filterGrinderID { xs = xs.filter { $0.grinder?.persistentModelID == gid } }
+        if !filterTags.isEmpty {
+            xs = xs.filter { shot in
+                let shotTags = Set(shot.tags)
+                return filterTags.isSubset(of: shotTags)
+            }
+        }
         switch sortBy {
         case .newest:  xs.sort { $0.date > $1.date }
         case .oldest:  xs.sort { $0.date < $1.date }
@@ -50,6 +57,7 @@ struct HistoryScreen: View {
         if filterBeanID != nil { n += 1 }
         if filterMachineID != nil { n += 1 }
         if filterGrinderID != nil { n += 1 }
+        n += filterTags.count
         return n
     }
 
@@ -127,6 +135,7 @@ struct HistoryScreen: View {
                 filterBeanID: $filterBeanID,
                 filterMachineID: $filterMachineID,
                 filterGrinderID: $filterGrinderID,
+                filterTags: $filterTags,
                 beans: beans,
                 machines: machines,
                 grinders: grinders,

@@ -36,10 +36,16 @@ struct OnboardingFlow: View {
                     VStack(alignment: .leading, spacing: 0) {
                         switch steps[step] {
                         case "welcome":
-                            OnbWelcomeStep(appearance: Binding(
-                                get: { settings.appearance },
-                                set: { settings.appearance = $0 }
-                            ))
+                            OnbWelcomeStep(
+                                appearance: Binding(
+                                    get: { settings.appearance },
+                                    set: { settings.appearance = $0 }
+                                ),
+                                temperatureUnit: Binding(
+                                    get: { settings.temperatureUnit },
+                                    set: { settings.temperatureUnit = $0 }
+                                )
+                            )
                         case "hardware":
                             OnbHardwareStep(machine: $machine, grinder: $grinder)
                         case "bean":

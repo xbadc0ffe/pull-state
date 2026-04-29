@@ -34,15 +34,19 @@ struct HardwareAddForm: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         labelGroup(kind == .machine ? "Espresso Machine" : "Grinder") {
-                            PSCard {
-                                VStack(spacing: 0) {
-                                    PSField(label: "Name") {
-                                        PSTextInput(text: $name, placeholder: kind.examplePlaceholder, alignment: .trailing)
+                            VStack(alignment: .leading, spacing: 12) {
+                                OnbCombobox(
+                                    label: "Name",
+                                    text: $name,
+                                    placeholder: "Search or type a model…",
+                                    options: HardwareCatalog.entries(for: kind).map(\.name),
+                                    onSelect: { picked in
+                                        if let b = HardwareCatalog.brand(forName: picked, kind: kind) {
+                                            brand = b
+                                        }
                                     }
-                                    PSField(label: "Brand", last: true) {
-                                        PSTextInput(text: $brand, placeholder: kind.exampleBrandPlaceholder, alignment: .trailing)
-                                    }
-                                }
+                                )
+                                OnbField(label: "Brand", text: $brand, placeholder: "e.g. \(kind.exampleBrandPlaceholder)")
                             }
                         }
 

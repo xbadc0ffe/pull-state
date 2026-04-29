@@ -23,7 +23,7 @@ Pull State is built around a single user (no accounts, no sync in v1) tracking e
 3. **BEANS** — bag library, including per-bag recipes and rating-trend charts.
 4. **HARDWARE** — machines and grinders, with shot counts.
 
-The tab bar is a custom rounded chrome at the bottom of the screen (`PSTabBar`), not the system `TabView`. Active tab gets an inset card background and the accent-colored icon. The Beans tab uses a custom `BeanIcon` shape (Canvas-drawn rotated oval + curved seam) since SF Symbols has no coffee-bean glyph.
+The tab bar is a custom rounded chrome at the bottom of the screen (`PSTabBar`), not the system `TabView`. Active tab gets an inset card background and the accent-colored icon. The Beans tab uses a custom `BeanIcon` shape (Canvas-drawn three-bean cluster — three rotated-oval-with-seam glyphs in a loose triangle, each in its own `drawLayer` block for isolated transforms) since SF Symbols has no coffee-bean glyph. The Hardware tab tries `espresso.machine` (iOS 18+ SF Symbols 6) and falls back to `cup.and.saucer.fill` if the symbol isn't available.
 
 ### Navigation model
 
@@ -37,7 +37,9 @@ enum NavRoute: Hashable {
 }
 ```
 
-Detail views render their own `PSNavBar` with a chevron back button. The system navigation bar is hidden via `.toolbar(.hidden, for: .navigationBar)` (gated for iOS via `HideNavBar`/`HideBackButton` modifiers so the build still compiles for macOS). Critically, the system back button is **not** hidden via `.navigationBarBackButtonHidden(true)` — that modifier silently disables the interactive swipe-from-left pop gesture. Hiding only the toolbar preserves swipe-back.
+Detail views render their own `PSNavBar` with a chevron back button. The system navigation bar is hidden via `.toolbar(.hidden, for: .navigationBar)` (gated for iOS via the `HideNavBar` modifier so the build still compiles for macOS). Critically, **`.navigationBarBackButtonHidden(true)` is never called anywhere** — that modifier silently disables the interactive swipe-from-left pop gesture. To make swipe-back continue working even with a hidden toolbar, a `UINavigationController` extension (`Utilities/SwipeBackFix.swift`, see §15.1) installs itself as the `interactivePopGestureRecognizer` delegate.
+
+Sheet presentations propagate `\.psPalette` and `\.psTempUnit` into the sheet's environment explicitly — sheets do not inherit environment by default in SwiftUI, so each `.sheet { … .environment(\.psPalette, palette).environment(\.psTempUnit, settings.temperatureUnit) }` block sets them.
 
 ### iPad layout
 
@@ -46,9 +48,11 @@ The single-column iPhone design is preserved on iPad by capping content to **560
 ### Sheets and modals
 
 - **About sheet** — large detent, custom × close in top-right
+- **Recipe sheet** — large detent over `palette.surface`, opened from the Log screen's "View Recipe" chip; matches About sheet chrome
 - **Add bean** / **Add hardware** — full-screen sheets (page background)
 - **Filter** / **Sort** — large/medium detents over palette.surface
 - **Onboarding** — full-screen overlay rendered in place of `MainTabView` until `AppSettings.hasCompletedOnboarding` flips
+- **Camera capture** — full-screen cover hosting `UIImagePickerController(.camera)` from `PSPhotoSourceMenu` (see §14)
 
 ---
 
@@ -58,15 +62,19 @@ The single-column iPhone design is preserved on iPad by capping content to **560
 
 Section order, top to bottom:
 
-1. **Source** — three picker rows in one card: Machine, Grinder, Beans. Each row expands inline when tapped to show options. If any list is empty, a single placeholder card directs the user to set up their gear first; the Save button stays disabled.
+1. **Source** — three picker rows in one card: Machine, Grinder, Beans. Each row expands inline when tapped to show options. If any list is empty, a single placeholder card directs the user to set up their gear first; the Save button stays disabled. When a bean is selected, a **View Recipe** chip appears under the card → opens `RecipeSheet` (§3.7).
 2. **Timer** — `DualTrackTimer`. See §6.
-3. **Settings** — sliders for `Dose / Weight In`, `Yield / Weight Out`, `Water Temp`, `Pressure`. **Pre-loaded from the selected bean's `Recipe` (`dose`, `yield`, `temp`, `pullPressure`)** when the bean changes. A small caption under the card reads "Loaded from {bean name} recipe." The grind setting itself is no longer entered on Log — it's pulled from the bean's recipe at save time, so dialing in a bean centralizes its grind in one place.
+3. **Settings** — sliders for `Dose / Weight In` (7–25 g, 0.1 step), `Yield / Weight Out` (7–75 g, 0.1 step), `Water Temp` (70–105 °C, 0.5 step — converted to Fahrenheit when the user has chosen °F, see §11.1), `Pressure` (4–12 bar, 0.1 step). When the bean changes, **only the recipe fields that are non-nil pre-populate their slider** — nil fields leave the slider where it was. A small caption under the card reads "Loaded from {bean name} recipe." The grind setting is pulled from `bean.recipe.grind` at save time.
 4. **Extraction** — three pills (Sour / Perfect / Bitter), tone-colored. Tappable to toggle on/off (single-select).
-5. **Tasting notes** — a flow-laid grid of all eight `TastingTag` values. Multi-select.
+5. **Tasting notes** — a flow-laid grid of all eight `TastingTag` values. Multi-select. (Tag set: Chocolate, Caramel, Fruity, Citrus, Floral, Nutty, Smoky, Earthy.)
 6. **Rating** — five stars (`PSStars`), bound to an Int 0–5.
-7. **Photo + Date card** — photo via `PhotosPicker` (real picker, with thumbnail + Change/Add/× actions). Date defaults to `.now` and is editable via a compact `DatePicker`.
+7. **Photo + Date card** — `PSPhotoSourceMenu` (Take Photo / Choose from Photos action sheet, see §14), with thumbnail + Change/Add/× actions. Date defaults to `.now` and is editable via a compact `DatePicker`.
 8. **Notes** — multi-line `TextEditor` over the card background, with placeholder.
 9. **Save shot button** — disabled unless bean + machine + grinder are all selected. Briefly flashes "SAVED ✓" after success and resets the form (timer, rating, extraction, tags, notes, photo, date back to `.now`).
+
+**After saving:** if the selected bean's recipe is missing any of `dose`/`yield`/`temp`/`pullPressure`, an alert "Save as recipe for {bean name}?" prompts the user. Tapping **Save Recipe** writes the shot's values into the bean's recipe, **only filling nil fields** — values the user has already set on the recipe are never overwritten. **Skip** dismisses without changes.
+
+**Keyboard handling:** the scroll view uses `.scrollDismissesKeyboard(.interactively)` plus a `simultaneousGesture(TapGesture)` that calls `dismissKeyboard()` (UIKit `resignFirstResponder` shim), so tapping outside the manual-time entry field dismisses its keyboard immediately. See §15 for the global "select all on focus" behavior that applies to every editable text/numeric field.
 
 ### 3.2 History
 
@@ -78,7 +86,7 @@ Section order, top to bottom:
 - Filter chip (with badge showing active filter count) + Sort chip + filtered/total ratio
 - Vertical list of `ShotCard` rows, each tappable to push `ShotDetailView`
 
-**Filter sheet** — extraction tone pills, min-rating pills (Any / 2+ / 3+ / 4+ / 5+), and three select rows (any beans / any machine / any grinder, populated from the actual library). Clear-all button on the left, Apply on the right.
+**Filter sheet** — extraction tone pills, **tasting-notes pills** (multi-select; AND-match — only shots that contain *all* selected tags pass), min-rating pills (Any / 2+ / 3+ / 4+ / 5+), and three select rows (any beans / any machine / any grinder, populated from the actual library). The filter chip's badge counter on History sums extraction + min-rating + each select + **each active tag**. Clear-all button on the left, Apply on the right.
 
 **Sort sheet** — four options: Newest first, Oldest first, Highest rated, Lowest rated. Selection is highlighted with accent ring and a checkmark.
 
@@ -92,7 +100,7 @@ Section order, top to bottom:
 - Detail timestamp footer
 
 **Shot detail (edit mode):**
-Same screen, but every field becomes editable: source pickers, extraction, tags, six sliders (dose, yield, temp, pressure, pre-infusion, pull), photo picker, date picker, notes editor. Cancel + Save in the nav bar trailing slot. A red **Delete shot** button at the bottom triggers a confirmation alert.
+Same screen, but every field becomes editable: source pickers, extraction, tags (rendered in `FlowLayout` matching Log spacing), six sliders (dose, yield, temp, pressure, pre-infusion, pull) with the same ranges as the Log screen and the same C/F display conversion, photo (`PhotoEditCard` over `PSPhotoSourceMenu`), date picker, notes editor. Cancel + Save in the nav bar trailing slot. A red **Delete shot** button at the bottom triggers a confirmation alert.
 
 ### 3.3 Beans
 
@@ -101,41 +109,45 @@ List of `BeanRowCard`s sorted by bag number descending. Each card shows: photo p
 **Empty state:** circular leaf icon, "No beans yet", "Tap + to log your first bag."
 
 **Bean detail (view mode):**
-- Bag photo placeholder
+- Bag photo (or placeholder if `bean.photoData` is nil) — 4:3 at the top
 - Name + "BAG #X" + roaster line
 - Roast badge + process chip + optional Single Origin chip
 - **Rating trend chart** — `RatingChart`, a Canvas-drawn sparkline of every shot for this bean ordered by date
 - Dates card: Roast date, Purchase date
 - Notes card (if any)
-- **Recipe card** — inline-editable. Tap "Edit" to flip the recipe block into edit mode (Cancel / Save). The recipe object lives as JSON `Data` on the bean; see §4.
+- **Recipe card** — inline-editable. Tap "Edit" to flip the recipe block into edit mode (Cancel / Save). The recipe object lives as JSON `Data` on the bean; see §4. Each row shows "—" when its underlying field is nil.
 - Footer: shot count + average rating
 
 **Bean detail (edit mode):**
-Top-level Edit toggles all bean metadata (name, roaster, single-origin toggle, process pills, roast pills, dates, notes). The recipe has its own separate Edit flow (mid-page) so users can dial in a recipe without entering the full edit flow. Bottom: red **Delete bean** button. Confirmation: *"Delete {bean name}? All associated pulls will be deleted too. N shots will be removed."* Implemented via SwiftData `@Relationship(deleteRule: .cascade, inverse: \Shot.bean)`.
+Top-level Edit toggles all bean metadata (name, roaster, single-origin toggle, process pills with inline animated "Specify" reveal when **Other** is chosen, roast pills, dates, **Photo** card via `PhotoEditCard`, notes). The recipe has its own separate Edit flow (mid-page) so users can dial in a recipe without entering the full edit flow. Bottom: red **Delete bean** button. Confirmation: *"Delete {bean name}? All associated pulls will be deleted too. N shots will be removed."* Implemented via SwiftData `@Relationship(deleteRule: .cascade, inverse: \Shot.bean)`.
 
-**Add bean form** — full-screen sheet over the page background. Bag number is auto-assigned (`AppSettings.nextBagNumber`) and shown in an accent banner. Sections: Identity, Single Origin toggle, Process pills (with optional "specify" field for Other), Roast Level pills, Dates (real `DatePicker`s), Photo placeholder card, Notes, Recipe block (editable). Save creates the bean and increments `nextBagNumber`. Cancel discards.
+**Add bean form** — full-screen sheet over the page background. Bag number is auto-assigned (`AppSettings.nextBagNumber`) and shown in an accent banner. Sections: Identity, Single Origin toggle, Process pills (with inline animated "specify" reveal when Other is selected — bound to `processOther`), Roast Level pills, Dates (real `DatePicker`s), **Photo card** (`PhotoEditCard` over `PSPhotoSourceMenu`), Notes, Recipe block (editable). Save creates the bean (with optional `photoData`) and increments `nextBagNumber`. Cancel discards.
 
 ### 3.4 Hardware
 
 Two stacked sections: **Espresso Machines** and **Grinders**. Each section header has a small accent "+ Add" button. Cards (`HardwareCard`) show photo placeholder, name, brand, and a "N SHOTS" pill (live count via the inverse relationship).
 
-**Hardware detail** — pushed when a card is tapped:
-- Photo placeholder (4:3)
+The Hardware tab icon uses the SF Symbol `espresso.machine` when available (iOS 18+ SF Symbols 6) and falls back to `cup.and.saucer.fill`. The Beans tab icon is a Canvas-drawn three-bean cluster (drawn via repeated `GraphicsContext.drawLayer` blocks for per-bean translation/rotation).
+
+**Hardware detail (view mode):**
+- Photo (or placeholder) — 4:3 at top, sourced from `equipment.photoData`
 - Name + brand
 - Stats card: Shots pulled (live count), Date added (`createdAt`)
 - Red **Delete machine/grinder** button. Confirmation note: *"Past shots logged on this machine/grinder will stay in your history but will no longer reference it."* Implemented via `@Relationship(deleteRule: .nullify, …)` — so shot data is preserved even after the hardware is deleted.
 
-**Add hardware form** — full-screen sheet, kind-aware: same form for "Add Machine" and "Add Grinder". Fields: Name, Brand, photo placeholder card, explanatory footer.
+**Hardware detail (edit mode):** Edit button in the nav bar trailing slot. Identity card with editable Name + Brand `PSTextInput`s, plus a **Photo** card (`PhotoEditCard`). Cancel + Save in the trailing slot.
+
+**Add hardware form** — full-screen sheet, kind-aware: same form for "Add Machine" and "Add Grinder". Name uses `OnbCombobox` driven by `HardwareCatalog` (substring case-insensitive match against name; selecting a suggestion auto-fills Brand via `HardwareCatalog.brand(forName:kind:)`, and Brand stays user-editable). Brand uses `OnbField`. The catalog covers manual/lever espresso machines and the common hand-grinder + electric-grinder ranges (Flair, Cafelat, Wacaco, La Pavoni, 1Zpresso, Commandante, Timemore, Kinu, Knock, Weber Workshops, Option-O, Fellow, Niche, DF, Baratza, Mazzer, Eureka, Fiorenzato, …). The user can type a fully custom name not in the catalog.
 
 ### 3.5 About sheet
 
 Presented from any tab via the `…` (ellipsis) icon in the top-right of the navigation bar. Large detent. Contents:
 
 - × close button (top-right)
-- App icon (custom Canvas-drawn cup with crema dot, on an accent-gradient rounded square)
+- App logo — `Image("badc0ffe-logo")` from the asset catalog, capped at 160 pt wide
 - Title "Pull State"
 - Version line "v 1.0.0 · APR 26 2026"
-- Card with rows: **Built by** (badc0ffe), **Contact** (info@badc0ffe.net), **GitHub** (github.com/xbadc0ffe/pull-state), **Appearance** (System / Light / Dark switch)
+- Card with rows: **Built by** (badc0ffe), **Contact** (info@badc0ffe.net), **GitHub** (tappable `Link` to `https://github.com/xbadc0ffe/pull-state`, accent-colored + underlined), **Temperature** (Celsius / Fahrenheit switch — see §11.1), **Appearance** (System / Light / Dark switch)
 - **Tip jar** — see §10
 - Footer copy block on `surfaceAlt` background
 
@@ -143,14 +155,26 @@ Presented from any tab via the `…` (ellipsis) icon in the top-right of the nav
 
 Four steps, progress dots at the top:
 
-1. **Welcome** — logo, title, "Three quick steps" card listing the three onboarding stages, plus an **Appearance** card with the same System/Light/Dark switch as About. Choosing here writes immediately to `AppSettings.appearance`.
-2. **Hardware** — two sections (Espresso Machine / Grinder), each with a custom `OnbCombobox` populated with a list of common models for autocomplete suggestions, plus a Brand text field. The user can pick a suggestion or type a custom name.
+1. **Welcome** — logo, title, "Three quick steps" card listing the three onboarding stages, then a **Temperature Unit** card (Celsius / Fahrenheit `TempUnitSwitch`) and an **Appearance** card (`ModeSwitch`). Choosing in either writes immediately to `AppSettings.temperatureUnit` / `AppSettings.appearance`.
+2. **Hardware** — two sections (Espresso Machine / Grinder), each with `OnbCombobox` driven by `HardwareCatalog` (substring case-insensitive match against name; selecting a suggestion auto-fills the corresponding Brand `OnbField` via the catalog's brand lookup). The user can pick a suggestion or type a custom name; brand stays editable after auto-fill.
 3. **Bean** — Bean name, Roaster, Roast level pills, plus a "BAG #001" reminder card.
 4. **Ready** — green-checked "You're dialed." summary card listing what was entered.
 
 Footer: primary action button (BEGIN SETUP / CONTINUE / PULL YOUR FIRST SHOT) plus a `< Back` link and a "Skip setup" link.
 
 On finish: any non-empty machine, grinder, and bean entered are inserted into SwiftData; `nextBagNumber` increments; `hasCompletedOnboarding` flips true. Skipping does the same — entries with empty names are skipped, the rest is saved.
+
+### 3.7 Recipe sheet
+
+Presented from the **View Recipe** chip on the Log screen's Source card (when a bean is selected). Large detent over `palette.surface`, × close button top-right, swipe-down dismissible — same chrome conventions as the About sheet.
+
+Header: bean name, "BAG #X · RECIPE".
+
+Body: one card with eight rows — Grind, Dose (g), Yield (g), Water Temp (°C/°F), Pre-Infusion Time (s), Pre-Infusion Pressure (bar), Pull Time (s), Pull Pressure (bar). Fields whose `Recipe` value is nil display "—".
+
+**Edit mode** — top-left **Edit** button toggles every row to a focused decimal/text input bound to a draft `Recipe`. Top-right shows **Save** (writes the draft back to `bean.recipe` via the JSON encode/decode path; only enabled when the draft differs from the saved recipe) and **Cancel** (discards the draft). The temperature row converts on display and on commit so the user always types in their chosen unit while storage stays in Celsius.
+
+**Closing with pending edits** — if the user taps × while edits are dirty, an alert *"Discard changes? Your edits to this recipe will be lost."* gates the dismiss. Clean closes go through immediately.
 
 ---
 
@@ -167,14 +191,15 @@ final class Bean {
     var bagNumber: Int
     var roaster: String
     var singleOrigin: Bool
-    var processRaw: String           // BeanProcess.rawValue
-    var processOther: String         // free-text when process == .other
-    var roastRaw: String             // Roast.rawValue
+    var processRaw: String                                  // BeanProcess.rawValue
+    var processOther: String                                // free-text when process == .other
+    var roastRaw: String                                    // Roast.rawValue
     var roastDate: Date
     var purchaseDate: Date
     var notes: String
     var createdAt: Date
-    private var recipeData: Data?    // JSON-encoded Recipe
+    @Attribute(.externalStorage) var photoData: Data?
+    private var recipeData: Data?                           // JSON-encoded Recipe
 
     @Relationship(deleteRule: .cascade, inverse: \Shot.bean)
     var shots: [Shot] = []
@@ -184,11 +209,13 @@ final class Bean {
 Computed/exposed:
 - `process: BeanProcess` and `roast: Roast` — get/set wrappers over the raw strings
 - `processDisplay: String` — uses `processOther` when process is `.other`
-- `recipe: Recipe` — JSON-decoded with backwards-compatible defaults; setter encodes
+- `recipe: Recipe` — JSON-decoded; **falls back to an empty `Recipe()` (all-nil)** when `recipeData` is nil or fails to decode. Setter encodes.
 - `ratingTrend: [BeanRatingPoint]` — shots sorted by date, mapped to (date, rating) for the sparkline
 - `averageRating: Double?` — nil when no shots
 
 Delete rule: `.cascade` on `shots` — deleting a bean removes all its shots. This is what the Bean detail's delete confirmation describes to the user.
+
+`photoData` uses `@Attribute(.externalStorage)` so bag photos live outside the SQLite file.
 
 ### 4.2 Shot
 
@@ -229,8 +256,9 @@ The references to Bean/Machine/Grinder are optional — a hardware item can be d
 final class Equipment {
     var name: String
     var brand: String
-    var kindRaw: String              // EquipmentKind.rawValue
+    var kindRaw: String                                     // EquipmentKind.rawValue
     var createdAt: Date
+    @Attribute(.externalStorage) var photoData: Data?
 
     @Relationship(deleteRule: .nullify, inverse: \Shot.machine)
     var machineShots: [Shot] = []
@@ -246,7 +274,7 @@ Computed:
 - `kind: EquipmentKind`
 - `shotCount: Int` — returns the right collection's count based on `kind`
 
-Delete rule: `.nullify` for both — deleting hardware preserves the shots, just nulls the reference.
+Delete rule: `.nullify` for both — deleting hardware preserves the shots, just nulls the reference. `photoData` uses external storage, same pattern as `Bean.photoData` and `Shot.photoData`.
 
 ### 4.4 AppSettings
 
@@ -255,13 +283,18 @@ Singleton row holding app-wide preferences:
 ```
 @Model
 final class AppSettings {
-    var appearanceRaw: String        // AppearanceMode.rawValue
+    var appearanceRaw: String                       // AppearanceMode.rawValue
+    var temperatureUnitRaw: String = "celsius"      // TemperatureUnit.rawValue
     var hasCompletedOnboarding: Bool
-    var hasTipped: Bool              // set after IAP success
-    var nextBagNumber: Int           // monotonic, never decremented
-    var seedDataInstalled: Bool      // currently always true after first install
+    var hasTipped: Bool                             // set after IAP success
+    var nextBagNumber: Int                          // monotonic, never decremented
+    var seedDataInstalled: Bool                     // currently always true after first install
 }
 ```
+
+`temperatureUnitRaw` carries an inline default (`= "celsius"`) so SwiftData lightweight migration can backfill existing AppSettings rows when this column is added.
+
+Computed: `appearance: AppearanceMode`, `temperatureUnit: TemperatureUnit` — get/set wrappers over the raw strings.
 
 `SeedData.installIfNeeded(context:)` runs in `RootView.task` and creates the `AppSettings` singleton if absent. The app starts empty — no demo beans, hardware, or shots. First bag added becomes `#1`.
 
@@ -269,34 +302,50 @@ final class AppSettings {
 
 Stored as JSON `Data` on `Bean.recipeData`. Not a `@Model` — `Recipe` is a `nonisolated struct Codable, Equatable, Sendable` so it can cross actor boundaries without warnings.
 
+**All fields are optional. There are no hardcoded defaults.** A fresh `Recipe()` is all-nil; an "unspecified" field is genuinely unspecified, not "default 18".
+
 ```
 struct Recipe {
-    var grind: String
-    var dose: Double             // default 18
-    var yield: Double            // default 38
-    var temp: Double             // default 93°C
-    var preInfTime: Double       // default 7s
-    var preInfPressure: Double   // default 3 bar
-    var pullTime: Double         // default 28s
-    var pullPressure: Double     // default 9 bar
+    var grind: String?
+    var dose: Double?
+    var yield: Double?
+    var temp: Double?               // stored in Celsius
+    var preInfTime: Double?         // seconds
+    var preInfPressure: Double?     // bar
+    var pullTime: Double?           // seconds
+    var pullPressure: Double?       // bar
 }
 ```
 
-`init(from: Decoder)` decodes each key with `decodeIfPresent` and falls back to the default — so beans saved before `dose` and `yield` were added migrate cleanly.
+`init(from: Decoder)` decodes every key with `decodeIfPresent`; a missing or null key decodes to nil. Old bean records that pre-date a field decode cleanly with that field as nil.
 
-The Log screen reads `dose`, `yield`, `temp`, `pullPressure` to pre-populate its Settings sliders when a bean is selected. The bean's full recipe is shown and editable on the Bean detail.
+**Every read site must guard for nil before using a value.** Anything that previously assumed a default (e.g. "the slider preloads to 18 g") now no-ops when the corresponding field is nil:
+- The Log screen's bean preload sets each slider only when its recipe field is non-nil; nil leaves the slider at its current value.
+- The "Save as recipe?" alert (§3.1) and `RecipeSheet` (§3.7) treat nil as "not specified" — the alert prompts when *any* of dose/yield/temp/pullPressure is nil, and only fills nil fields.
+- Timer green-target windows render only when `recipe.preInfTime` / `recipe.pullTime` are non-nil (§6).
+
+The bean's full recipe is shown and editable on the Bean detail card and in the Log screen's `RecipeSheet`.
 
 ### 4.6 Enums
 
-| Enum            | Values                                                       | Where used                                |
-| --------------- | ------------------------------------------------------------ | ----------------------------------------- |
-| `Extraction`    | sour, perfect, bitter                                        | Shot.extraction; shows as colored pill    |
-| `Roast`         | light, medium, dark                                          | Bean.roast; pip color in `PSRoastBadge`   |
-| `BeanProcess`   | washed, natural, honey, wetHulled, other                     | Bean.process; "Other" reveals text input  |
-| `EquipmentKind` | machine, grinder                                             | Equipment.kind                            |
-| `TastingTag`    | acidic, bitter, sour, sweet, smoky, nutty, floral, perfect   | Shot.tags (multi-select)                  |
-| `SortOrder`     | newest, oldest, highest, lowest                              | History sort                              |
-| `AppearanceMode`| system, light, dark                                          | AppSettings.appearance                    |
+| Enum              | Values                                                            | Where used                                |
+| ----------------- | ----------------------------------------------------------------- | ----------------------------------------- |
+| `Extraction`      | sour, perfect, bitter                                             | Shot.extraction; shows as colored pill    |
+| `Roast`           | light, medium, dark                                               | Bean.roast; pip color in `PSRoastBadge`   |
+| `BeanProcess`     | washed, natural, honey, wetHulled, other                          | Bean.process; "Other" reveals text input  |
+| `EquipmentKind`   | machine, grinder                                                  | Equipment.kind                            |
+| `TastingTag`      | chocolate, caramel, fruity, citrus, floral, nutty, smoky, earthy  | Shot.tags (multi-select); History filter  |
+| `SortOrder`       | newest, oldest, highest, lowest                                   | History sort                              |
+| `AppearanceMode`  | system, light, dark                                               | AppSettings.appearance                    |
+| `TemperatureUnit` | celsius, fahrenheit                                               | AppSettings.temperatureUnit; display only |
+
+`TastingTag` exposes a `label: String` (capitalized rawValue) for display — the rawValue is lowercase so it persists cleanly. **Unknown raw values are silently dropped** on read via `compactMap(TastingTag.init(rawValue:))` — older shot records that referenced the previous tag set (Acidic / Bitter / Sour / Sweet / …) decode to an empty subset of the new set with no crash, no migration step, and no UI surfacing.
+
+`TemperatureUnit` provides:
+- `label: String` — `"°C"` / `"°F"`, used as a unit suffix
+- `pickerLabel: String` — `"Celsius"` / `"Fahrenheit"`, used in the toggle UI
+- `display(celsius:) -> Double` — Celsius → user's chosen unit
+- `toCelsius(_:) -> Double` — inverse, applied on input
 
 ---
 
@@ -327,25 +376,38 @@ Defined in `Views/Components/` and used everywhere:
 - `PSStars` — interactive or read-only star rating
 - `PSPlaceholder` — diagonal-stripe Canvas (mirrors the prototype's placeholder)
 - `PSNavBar` — top bar (small or large variant), with leading and trailing slots
-- `PSTabBar` — custom rounded chrome bar; `BeanIcon` sub-shape for the Beans tab
+- `PSTabBar` — custom rounded chrome bar; the Beans tab uses a Canvas-drawn three-bean cluster (`BeanIcon`); the Hardware tab tries `espresso.machine` and falls back to `cup.and.saucer.fill`
 - `PSIconBtn`, `PSTextBtn`, `PSToggle`, `PSRoastBadge`, `IconChip`, `StatCard`
 - `FlowLayout` — custom `Layout` for tag clouds
 - `PSPageBackground` — radial-gradient warm wash, full screen
 - `PSContentColumn` — caps content to 560pt centered (iPad layout)
+- `PSPhotoSourceMenu` — universal photo entry point (§14): action sheet over Take Photo / Choose from Photos, falls back to Photos-only when the camera is unavailable
+- `PhotoEditCard` — thumbnail row with Add/Change + ✕ remove, used by Bean add/edit, Hardware edit, and Log
+- `ModeSwitch` (Appearance) and `TempUnitSwitch` (Celsius/Fahrenheit) — capsule segmented controls used by both About and Onboarding
+
+Slider note: `SliderField` (in `Views/Log/`) does its own gesture handling — a `DragGesture(minimumDistance: 0)` over the visual track maps tap/drag x-position to a stepped, clamped value. There is no hidden `Slider` underneath; the visible thumb is the only thing that exists.
 
 ### 5.4 Decisions worth flagging
 
 - **No Form / List**. The whole app uses `ScrollView` + `VStack` + cards because the design language doesn't match the iOS Form aesthetic and because the warm page background needs to bleed into the empty space around the cards.
 - **No third-party deps.** First-party Apple frameworks only (per `CLAUDE.md`).
-- **Photos** use `PhotosPicker` from `PhotosUI` (no PHPickerViewController bridging).
+- **Photos** go through `PSPhotoSourceMenu` everywhere, never `PhotosPicker` directly. The menu wraps `PhotosPicker` for the library path and a `UIImagePickerController` `UIViewControllerRepresentable` for the camera path. Required Info.plist keys (`NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`) are set as `INFOPLIST_KEY_*` build settings on both Debug and Release configurations.
 - **No force unwraps** in shipped code; optionals are unwrapped via `if let` / `guard`.
-- **Cross-platform shims.** `HideNavBar`, `HideBackButton`, `PSDecimalKeyboard` ViewModifiers gate iOS-only modifiers behind `#if os(iOS)` so the project also builds for macOS.
+- **Cross-platform shims.** `HideNavBar` and `PSDecimalKeyboard` ViewModifiers gate iOS-only modifiers behind `#if os(iOS)` so the project also builds for macOS. The `HideBackButton` modifier was removed — it was unused and dangerous (calling `.navigationBarBackButtonHidden(true)` silently kills the swipe-back gesture).
 
 ---
 
 ## 6. Timer Flow
 
-`DualTrackTimer` shows two stacked tracks: **PRE-INFUSION** (display range 0–10s) and **PULL** (display range 0–30s), plus a large total-elapsed readout in the top-left and a status badge in the top-right (READY / PRE-INFUSION / PULLING / DONE). When the pulse animation runs, the status dot pulses.
+`DualTrackTimer` shows two stacked tracks: **PRE-INFUSION** and **PULL**, plus a large total-elapsed readout in the top-left and a status badge in the top-right (READY / PRE-INFUSION / PULLING / DONE). When the pulse animation runs, the status dot pulses.
+
+### Track scaling and target windows
+
+Each track's full width represents `trackMax` seconds:
+- If the selected bean's `Recipe.preInfTime` / `pullTime` is **non-nil**, `trackMax = target / 0.75` so the recipe target sits at exactly the **75% mark** of the track. A green band rendered at `palette.good.opacity(0.30)` spans `target ± tolerance` (±1 s for pre-infusion, ±3 s for pull) **behind** the elapsed-fill gradient.
+- If the field is nil, `trackMax` falls back to the previous fixed scaling (10 s pre / 30 s pull) and **no green band renders** — layout is unchanged.
+
+The targets and bands re-derive automatically when the user changes the bean mid-session; nothing is cached.
 
 ### State machine
 
@@ -354,12 +416,13 @@ TimerState: .idle → .running → .done → (reset) → .idle
 TimerPhase: .pre  → .pull
 ```
 
-### Buttons (mutually visible while not done)
+### Buttons
 
-- **START** — only enabled in `.idle`; resets elapsed and enters `.running` / `.pre`
-- **FIRST DRIP** — only enabled in `.running` / `.pre`; records `preEnd = elapsed`, switches phase to `.pull`
-- **DONE** — enabled in `.running`; if `preEnd` is still nil (no first-drip pressed), it's set to current elapsed (zero pre-infusion); `pullEnd = elapsed`; state goes to `.done`
-- **RESET TIMER** — replaces the three buttons in `.done`; clears state back to `.idle`
+- **START** / **FIRST DRIP** / **DONE** — three equal-width squares in a horizontal row (`.aspectRatio(1, contentMode: .fit)` + `minWidth: 64`, `minHeight: 64`), aiming for ~72×72 pt on a typical iPhone. The label inside each button uses `frame(maxWidth: .infinity, maxHeight: .infinity)` so the accent/surface background fills the full square.
+  - **START** — only enabled in `.idle`; resets elapsed and enters `.running` / `.pre`
+  - **FIRST DRIP** — only enabled in `.running` / `.pre`; records `preEnd = elapsed`, switches phase to `.pull`
+  - **DONE** — enabled in `.running`; if `preEnd` is still nil (no first-drip pressed), it's set to current elapsed (zero pre-infusion); `pullEnd = elapsed`; state goes to `.done`
+- **RESET TIMER** — replaces the three buttons in `.done`; full-width pill (≥18 pt vertical padding) so it stays a clean tap target; clears state back to `.idle`
 
 ### Tick
 
@@ -367,7 +430,7 @@ A `Timer.publish(every: 0.067, on: .main, in: .common).autoconnect()` (~15Hz) up
 
 ### Manual entry
 
-Tapping the value label on either track (when timer is not running) flips it into a focused decimal-keyboard text field. Submitting writes through `setManualPre` or `setManualPull`, which jumps the state machine to `.done` and back-fills the other track if needed. This lets users log a shot retroactively without the timer.
+Tapping the value label on either track (when timer is not running) flips it into a focused decimal-keyboard text field. Submitting writes through `setManualPre` or `setManualPull`, which jumps the state machine to `.done` and back-fills the other track if needed. This lets users log a shot retroactively without the timer. The Log screen's tap-outside-to-dismiss handler (§3.1) closes the keyboard.
 
 ### Shot save
 
@@ -383,7 +446,9 @@ Single-select pill row with three values: **Sour** (red), **Perfect** (green), *
 
 ### Tasting tags
 
-Eight values: **Acidic, Bitter, Sour, Sweet, Smoky, Nutty, Floral, Perfect**. Multi-select via flow-laid pills. Active state is filled with the accent color. Stored as `[String]` of raw values; the convenience `tags: [TastingTag]` getter maps them back. (Yes, "Bitter" exists in both Extraction and Tags — by design: extraction is the diagnosis, tags are the descriptors.)
+Eight values: **Chocolate, Caramel, Fruity, Citrus, Floral, Nutty, Smoky, Earthy**. Multi-select via flow-laid pills. Active state is filled with the accent color. Stored as `[String]` of lowercase raw values; the convenience `tags: [TastingTag]` getter maps them back via `compactMap`, so any unrecognized rawValue (e.g. a tag from a previous tag-set version) is silently dropped without a crash and without surfacing a migration prompt.
+
+The History filter sheet exposes the same eight pills as a multi-select group. Selecting more than one applies an **AND match** — only shots whose tag set is a superset of the selected tags pass.
 
 Both systems are intentionally small and fixed for v1 — no custom tags. This keeps filtering clean and keeps tagging from becoming a categorization chore.
 
@@ -415,9 +480,9 @@ Presented from the `…` icon in any tab's nav bar. Large detent over `palette.s
 
 Layout (top to bottom):
 
-1. App icon — Canvas-drawn cup with crema dot, on accent gradient
+1. App logo — `Image("badc0ffe-logo")` from the asset catalog (max 160 pt wide, `.scaledToFit()`)
 2. Title "Pull State" + version line "v 1.0.0 · APR 26 2026"
-3. Identity card — Built by, Contact, GitHub, Appearance switch
+3. Identity card — Built by, Contact, GitHub (tappable `Link`), **Temperature** (Celsius/Fahrenheit `TempUnitSwitch`), **Appearance** (System/Light/Dark `ModeSwitch`)
 4. Tip jar (see below)
 5. Tagline footer on `surfaceAlt`
 
@@ -428,9 +493,11 @@ Layout (top to bottom):
 - **Price:** $2.99 (display price loaded from StoreKit when available)
 - **Title:** "Buy Me a Coffee"
 
-Implemented via **StoreKit 2**, async/await, in `Utilities/StoreManager.swift` — an `@Observable @MainActor` class that loads the product, runs the purchase, and finishes the transaction. Verification uses `Transaction.verified` and discards unverified results.
+Implemented via **StoreKit 2**, async/await, in `Utilities/StoreManager.swift` — an `@Observable @MainActor` class that loads the product on `init()` (eager), runs the purchase, and finishes the transaction. Verification uses `Transaction.verified` and discards unverified results.
 
 State persistence: on a verified purchase, `AppSettings.hasTipped` flips true. The button visually flips to a checkmark + "Thanks for the coffee!" + "Means the world. Now back to dialing in." It stays in this state across launches.
+
+`StoreManager.hasPriorEntitlement()` walks `Transaction.currentEntitlements` for the tip product. The About sheet's `.task` calls it on appear and re-flips `hasTipped` true if a prior purchase exists — this restores the tipped state on a fresh install or after wiping local data, without requiring a re-purchase.
 
 **No features are gated behind the IAP** — per the project's design rules. It's purely a tip jar.
 
@@ -438,18 +505,38 @@ State persistence: on a verified purchase, `AppSettings.hasTipped` flips true. T
 
 `Resources/PullState.storekit` defines the product locally so the purchase sheet works in the Simulator without setting it up in App Store Connect. To enable: edit the **Pull State** scheme → Run → Options → set **StoreKit Configuration** to `PullState.storekit`. When the live product is created in App Store Connect with the same ID, the live store takes over automatically — no code change.
 
+A reminder comment in `StoreManager.swift` calls this scheme setup out so it isn't forgotten when the file is opened cold.
+
 ---
 
-## 11. Dark / Light / System Appearance
+## 11. User preferences (Appearance + Temperature unit)
 
-`AppearanceMode` is a three-value enum stored on `AppSettings`. `RootView` reads it and applies `.preferredColorScheme(...)` to the entire scene:
+Two app-wide preferences live on `AppSettings` and are pushed into the SwiftUI environment by `MainTabView`, so deep child views read them without prop drilling.
+
+### 11.1 Appearance (Dark / Light / System)
+
+`AppearanceMode` is a three-value enum on `AppSettings`. `RootView` reads it and applies `.preferredColorScheme(...)` to the entire scene:
 - `.system` → no override (`nil`), follows OS
 - `.light` → `.light`
 - `.dark` → `.dark`
 
 Both `PSPalette.light` and `PSPalette.dark` are hand-tuned with separate hex values for every token (not a `colorScheme`-conditional opacity hack). The active palette is resolved via `PSPalette.resolve(for: ColorScheme)` and pushed into `EnvironmentValues.psPalette`.
 
-The user can change appearance from two places: the **Welcome step of onboarding** (so they pick the right look on first run) and the **About sheet** (any time after).
+### 11.2 Temperature unit (Celsius / Fahrenheit)
+
+`TemperatureUnit` is stored on `AppSettings.temperatureUnitRaw` (default `"celsius"`). `MainTabView` exposes the resolved value via the `\.psTempUnit` environment key (`PSTempUnitKey.defaultValue == .celsius`).
+
+**All temperatures are stored in Celsius internally.** Display and input convert at the UI layer only:
+
+- The Log screen's water-temp slider wraps `$waterTemp` in a `Binding<Double>` whose `get` calls `tempUnit.display(celsius:)` and whose `set` calls `tempUnit.toCelsius(_:)`. The slider's range and step also flip with the unit (70–105 °C / 0.5 step ↔ 158–221 °F / 1 step). The stored `Shot.waterTemp` is always Celsius.
+- `ShotDetailView` uses the same wrapper for its edit-mode slider and a `formattedTemp(_:)` helper for the read-only display.
+- `RecipeSheet` uses a dedicated `RecipeTempField` row that converts on display and on commit, so the user always types in their chosen unit while `Recipe.temp` stays in Celsius.
+
+### 11.3 Where the user can change them
+
+Both preferences are exposed in two places:
+- **Onboarding Welcome step** — a Temperature Unit card and an Appearance card, written live to `AppSettings`.
+- **About sheet** — Temperature row above Appearance row in the identity card, same writes.
 
 ---
 
@@ -459,8 +546,8 @@ Lives in `Views/Onboarding/`. Rendered by `RootView` when `AppSettings.hasComple
 
 Four steps with a top progress-dot indicator: **Welcome → Hardware → Bean → Ready**.
 
-- **Welcome** — logo, three-step explainer card, **Appearance picker** card (writes to settings live)
-- **Hardware** — Machine combobox + Brand text field; Grinder combobox + Brand text field. The `OnbCombobox` lets the user pick from a list of common models or type a custom name; selecting a suggestion fills the text field.
+- **Welcome** — logo, three-step explainer card, **Temperature Unit** card, **Appearance picker** card (both write to settings live)
+- **Hardware** — Machine combobox + Brand text field; Grinder combobox + Brand text field. `OnbCombobox` is driven by `HardwareCatalog` (substring case-insensitive name match); selecting a suggestion auto-fills the Brand field via `HardwareCatalog.brand(forName:kind:)`. Brand stays user-editable and the user can also type a fully custom name.
 - **Bean** — Name, Roaster, Roast level pills. Sidebar info card "BAG #001 · auto-increment".
 - **Ready** — green-checked summary card with the user's machine, grinder, and bean entries.
 
@@ -470,7 +557,72 @@ On finish or skip, any non-empty entries are persisted, `nextBagNumber` incremen
 
 ---
 
-## 13. Deferred V2 Features
+## 13. Hardware Catalog
+
+`Utilities/HardwareCatalog.swift` is the single source of truth for the autocomplete suggestions used by both the onboarding hardware step and the Add Hardware form.
+
+```swift
+struct HardwareEntry: Hashable, Identifiable {
+    let name: String
+    let brand: String
+    var id: String { "\(brand)::\(name)" }
+}
+
+enum HardwareCatalog {
+    static let machines: [HardwareEntry] = [...]
+    static let grinders: [HardwareEntry] = [...]
+    static func entries(for: EquipmentKind) -> [HardwareEntry]
+    static func brand(forName: String, kind: EquipmentKind) -> String?
+}
+```
+
+Lists are intentionally focused on the audience: manual/lever espresso machines (Flair, Cafelat, Wacaco, La Pavoni, Elektra, Olympia Express, Ponte Vecchio, Portaspresso, Gaggiuino) and the popular hand- and electric-grinder ranges (1Zpresso, Commandante, Timemore, Kinu, Orphan Espresso, Knock, Weber Workshops, Option-O, Fellow, Niche, DF Grinders, Baratza, Mazzer, Eureka, Fiorenzato).
+
+The catalog is *suggestions only* — the combobox accepts any custom name and the brand field stays editable after auto-fill.
+
+---
+
+## 14. Photo Capture
+
+A single component, `PSPhotoSourceMenu`, is used everywhere the user can attach a photo (Log shot, Bean add/edit, Hardware edit, Shot edit). It owns:
+
+- A `confirmationDialog` action sheet with **Take Photo** and **Choose from Photos** options
+- A `.photosPicker(isPresented:selection:matching:photoLibrary:)` for the library path
+- A `.fullScreenCover` (iOS-only) hosting a `UIViewControllerRepresentable` wrapper around `UIImagePickerController(sourceType: .camera)` for the camera path
+
+Camera availability is gated by `UIImagePickerController.isSourceTypeAvailable(.camera)`. When the camera is unavailable (e.g. iOS Simulator, iPad without rear camera, macOS Catalyst), the action sheet is bypassed and the picker opens directly into Photos. On macOS the camera path is compiled out via `#if canImport(UIKit)`.
+
+The wrapped `CameraImagePicker` writes the captured image as JPEG (`compressionQuality: 0.85`) into the bound `Data?`. All photo storage on the SwiftData side uses `@Attribute(.externalStorage)` (Bean, Equipment, Shot).
+
+`PhotoEditCard` composes `PSPhotoSourceMenu` into the standard thumbnail row used by the bean / hardware / shot edit cards: thumbnail (or `PSPlaceholder`) on the left, label + hint in the middle, and an Add/Change capsule plus an ✕ remove circle on the right.
+
+**Info.plist keys** (added as `INFOPLIST_KEY_*` build settings on Debug + Release):
+- `NSCameraUsageDescription` — "Pull State uses the camera to take photos of beans, hardware, and shots."
+- `NSPhotoLibraryUsageDescription` — "Pull State adds selected photos to beans, hardware, and shots."
+
+---
+
+## 15. Behavioral Utilities
+
+Three small pieces of UIKit-adjacent behavior live in `Utilities/`. Each is a deliberate, narrow exception to "SwiftUI only" — kept tiny and isolated so the rest of the codebase stays declarative.
+
+### 15.1 Swipe-back fix (`Utilities/SwipeBackFix.swift`)
+
+`UINavigationController` retroactively conforms to `UIGestureRecognizerDelegate`, sets the `interactivePopGestureRecognizer.delegate` to `self` in `viewDidLoad`, and returns `true` from `gestureRecognizerShouldBegin` whenever the stack has more than one controller.
+
+Without this, hiding the toolbar with `.toolbar(.hidden, for: .navigationBar)` causes UIKit to disable the swipe-from-edge pop gesture (because the back button — its default trigger — isn't visible). Detail views hide the toolbar but **never** call `.navigationBarBackButtonHidden(true)`, which would silently break the gesture for a different reason.
+
+### 15.2 Select-all-on-focus (`Utilities/SelectAllOnFocus.swift`)
+
+A global, idempotent `install()` (called once from `Pull_StateApp.init()`) adds two notification observers — `UITextField.textDidBeginEditingNotification` and `UITextView.textDidBeginEditingNotification` — that call `selectAll(_:)` on the field/view (only when the existing content is non-empty). The result: tapping any editable numeric or text field with prior content immediately selects all of it, so the user's first keystroke replaces the value.
+
+### 15.3 Seed data (`Utilities/SeedData.swift`)
+
+Creates the `AppSettings` singleton on first launch only. The app starts empty — no demo beans, hardware, or shots. Bag #1 is the user's first real bag.
+
+---
+
+## 16. Deferred V2 Features
 
 Per `CLAUDE.md`, **not** in v1 — do not implement until explicitly scoped:
 
@@ -490,28 +642,33 @@ These are deliberate omissions, not unbuilt features. The data model and archite
 
 ```
 Pull State/
-├── Pull_StateApp.swift            (@main, ModelContainer)
+├── Pull_StateApp.swift            (@main, ModelContainer, SelectAllOnFocus.install())
 ├── Models/
-│   ├── Bean.swift
-│   ├── Shot.swift
-│   ├── Equipment.swift
-│   ├── AppSettings.swift
-│   ├── Recipe.swift               (Codable value type, BeanRatingPoint)
-│   └── Enums.swift
+│   ├── Bean.swift                 (incl. photoData: Data?, recipe accessor)
+│   ├── Shot.swift                 (photoData: Data?)
+│   ├── Equipment.swift            (incl. photoData: Data?)
+│   ├── AppSettings.swift          (AppearanceMode + TemperatureUnit enums)
+│   ├── Recipe.swift               (all-optional Codable value type, BeanRatingPoint)
+│   └── Enums.swift                (Extraction, Roast, BeanProcess, EquipmentKind, TastingTag, SortOrder)
 ├── Resources/
-│   ├── Theme.swift                (PSPalette, PSFont, PSFmt, PSShadow)
+│   ├── Theme.swift                (PSPalette, PSFont, PSFmt, PSShadow, \.psPalette + \.psTempUnit env keys)
 │   └── PullState.storekit         (local IAP config)
 ├── Utilities/
 │   ├── SeedData.swift             (creates AppSettings singleton)
-│   └── StoreManager.swift         (StoreKit 2)
+│   ├── StoreManager.swift         (StoreKit 2 + entitlement restore)
+│   ├── HardwareCatalog.swift      (machines + grinders for the combobox)
+│   ├── SwipeBackFix.swift         (UINavigationController gesture delegate)
+│   └── SelectAllOnFocus.swift     (global UITextField/UITextView observer)
 └── Views/
     ├── RootView.swift             (onboarding ↔ main switch)
-    ├── MainTabView.swift          (NavigationStack, NavRoute, sheets)
-    ├── Components/                (palette-aware reusable views)
+    ├── MainTabView.swift          (NavigationStack, NavRoute, sheets, env injection)
+    ├── Components/                (palette-aware reusable views; PSPhotoSourceMenu, PhotoEditCard)
     ├── Log/                       (LogScreen, DualTrackTimer, SliderField, PickerRow)
     ├── History/                   (HistoryScreen, ShotCard, ShotDetailView, FilterSheet, SortSheet)
-    ├── Beans/                     (BeansScreen, BeanDetailView, BeanAddForm, RecipeBlock, RatingChart)
+    ├── Beans/                     (BeansScreen, BeanDetailView, BeanAddForm, RecipeBlock, RecipeSheet, RatingChart)
     ├── Hardware/                  (HardwareScreen, HardwareDetailView, HardwareAddForm)
-    ├── About/                     (AboutSheet)
-    └── Onboarding/                (OnboardingFlow + 4 step views)
+    ├── About/                     (AboutSheet — also defines ModeSwitch + TempUnitSwitch)
+    └── Onboarding/                (OnboardingFlow + 4 step views; OnbCombobox/OnbField in OnbHardwareStep)
 ```
+
+Asset catalog: `Assets.xcassets/badc0ffe-logo.imageset/` (sourced from `branding/badc0ffe-logo.png`) — used by the About sheet header.

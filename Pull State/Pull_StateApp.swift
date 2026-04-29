@@ -15,6 +15,7 @@ struct Pull_StateApp: App {
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
+        SelectAllOnFocus.install()
     }
 
     var body: some Scene {

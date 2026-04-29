@@ -14,8 +14,13 @@ struct SliderField: View {
     @State private var draft: String = ""
     @FocusState private var focused: Bool
 
-    private var displayLow: Double { min(range.lowerBound, value) }
-    private var displayHigh: Double { max(range.upperBound, value) }
+    private var clampedValue: Double {
+        min(max(value, range.lowerBound), range.upperBound)
+    }
+    private var fraction: Double {
+        let span = range.upperBound - range.lowerBound
+        return span > 0 ? (clampedValue - range.lowerBound) / span : 0
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -76,21 +81,34 @@ struct SliderField: View {
                 }
             }
 
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(palette.surfaceAlt)
-                    .frame(height: 4)
-                    .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(palette.line, lineWidth: 0.5))
-                GeometryReader { proxy in
+            GeometryReader { proxy in
+                let trackWidth = proxy.size.width
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(palette.surfaceAlt)
+                        .frame(height: 4)
+                        .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(palette.line, lineWidth: 0.5))
+
                     RoundedRectangle(cornerRadius: 2)
                         .fill(LinearGradient(colors: [palette.accent, palette.accentDeep], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: proxy.size.width * fraction, height: 4)
+                        .frame(width: max(0, trackWidth * fraction), height: 4)
+
+                    Circle()
+                        .fill(palette.accent)
+                        .frame(width: 18, height: 18)
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
+                        .psShadow(strong: false)
+                        .offset(x: max(0, min(trackWidth - 18, trackWidth * fraction - 9)))
                 }
-                .frame(height: 4)
-                Slider(value: $value, in: displayLow...displayHigh, step: step)
-                    .tint(palette.accent)
-                    .opacity(0.001) // hit target only — visual is custom
-                    .frame(height: 22)
+                .frame(height: 22)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { g in
+                            update(from: g.location.x, width: trackWidth)
+                        }
+                )
             }
             .frame(height: 22)
         }
@@ -104,16 +122,24 @@ struct SliderField: View {
     }
 
     private var formatted: String {
-        String(format: "%.*f", decimals, value)
+        String(format: "%.*f", decimals, clampedValue)
     }
-    private var fraction: Double {
-        let span = displayHigh - displayLow
-        return span > 0 ? (value - displayLow) / span : 0
+
+    private func update(from x: CGFloat, width: CGFloat) {
+        guard width > 0 else { return }
+        let f = max(0, min(1, x / width))
+        let raw = range.lowerBound + Double(f) * (range.upperBound - range.lowerBound)
+        let stepped = (raw / step).rounded() * step
+        let clamped = min(max(stepped, range.lowerBound), range.upperBound)
+        if abs(clamped - value) > 1e-9 {
+            value = clamped
+        }
     }
+
     private func commit() {
         defer { editing = false }
         let trimmed = draft.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, let n = Double(trimmed) else { return }
-        value = n
+        value = min(max(n, range.lowerBound), range.upperBound)
     }
 }

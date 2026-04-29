@@ -7,6 +7,7 @@ final class Equipment {
     var brand: String
     var kindRaw: String
     var createdAt: Date
+    @Attribute(.externalStorage) var photoData: Data?
 
     @Relationship(deleteRule: .nullify, inverse: \Shot.machine)
     var machineShots: [Shot] = []
@@ -18,11 +19,13 @@ final class Equipment {
         name: String,
         brand: String,
         kind: EquipmentKind,
+        photoData: Data? = nil,
         createdAt: Date = .now
     ) {
         self.name = name
         self.brand = brand
         self.kindRaw = kind.rawValue
+        self.photoData = photoData
         self.createdAt = createdAt
     }
 

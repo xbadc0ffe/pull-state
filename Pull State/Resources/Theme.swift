@@ -79,10 +79,18 @@ private struct PSPaletteKey: EnvironmentKey {
     static let defaultValue: PSPalette = .dark
 }
 
+private struct PSTempUnitKey: EnvironmentKey {
+    static let defaultValue: TemperatureUnit = .celsius
+}
+
 extension EnvironmentValues {
     var psPalette: PSPalette {
         get { self[PSPaletteKey.self] }
         set { self[PSPaletteKey.self] = newValue }
+    }
+    var psTempUnit: TemperatureUnit {
+        get { self[PSTempUnitKey.self] }
+        set { self[PSTempUnitKey.self] = newValue }
     }
 }
 

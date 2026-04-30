@@ -681,3 +681,5 @@ Pull State/
 ```
 
 Asset catalog: `Assets.xcassets/badc0ffe-logo.imageset/` (sourced from `branding/badc0ffe-logo.png`) — used by the About sheet header.
+
+App icon: `Assets.xcassets/AppIcon.appiconset/` is a Single Size 1024×1024 universal-iOS set with two appearance slots — Any (light) → `AppIcon-light-1024.png`, Dark → `AppIcon-dark-1024.png`. Sourced from `branding/icon-light.png` and `branding/icon-dark.png`. No tinted variant. Xcode generates all derivative sizes from the 1024 source.

@@ -62,17 +62,22 @@ The single-column iPhone design is preserved on iPad by capping content to **560
 
 Section order, top to bottom:
 
-1. **Source** — three picker rows in one card: Machine, Grinder, Beans. Each row expands inline when tapped to show options. If any list is empty, a single placeholder card directs the user to set up their gear first; the Save button stays disabled. When a bean is selected, a **View Recipe** chip appears under the card → opens `RecipeSheet` (§3.7).
+1. **Source** — three picker rows in one card: Machine, Grinder, Beans. Each row expands inline when tapped to show options. If any list is empty, a single placeholder card directs the user to set up their gear first; the Save button stays disabled. When a bean is selected, a **View Recipe** chip appears under the card → opens `RecipeSheet` (§3.7). On first appear, machine/grinder/bean are pre-selected from the **most recently logged shot** (`Shot.date` descending, take 1); when no shots exist yet, each picker falls back to the first item in its respective list. After a save the same equipment stays selected, so the next shot starts with the just-saved gear.
 2. **Timer** — `DualTrackTimer`. See §6.
-3. **Settings** — sliders for `Dose / Weight In` (7–25 g, 0.1 step), `Yield / Weight Out` (7–75 g, 0.1 step), `Water Temp` (70–105 °C, 0.5 step — converted to Fahrenheit when the user has chosen °F, see §11.1), `Pressure` (4–12 bar, 0.1 step). When the bean changes, **only the recipe fields that are non-nil pre-populate their slider** — nil fields leave the slider where it was. A small caption under the card reads "Loaded from {bean name} recipe." The grind setting is pulled from `bean.recipe.grind` at save time.
+3. **Settings** — `Grind Setting` text field at the top (free-text, e.g. `"22"`), then sliders for `Dose / Weight In` (7–25 g, 0.1 step), `Yield / Weight Out` (7–75 g, 0.1 step), `Water Temp` (70–105 °C, 0.5 step — converted to Fahrenheit when the user has chosen °F, see §11.1), `Pressure` (4–12 bar, 0.1 step). When the bean changes, **only the recipe fields that are non-nil pre-populate their slider** — nil fields leave the slider where it was. The Grind Setting field also preloads from `recipe.grind` (and clears when the recipe value is nil). A small caption under the card reads "Loaded from {bean name} recipe."
 4. **Extraction** — three pills (Sour / Perfect / Bitter), tone-colored. Tappable to toggle on/off (single-select).
-5. **Tasting notes** — a flow-laid grid of all eight `TastingTag` values. Multi-select. (Tag set: Chocolate, Caramel, Fruity, Citrus, Floral, Nutty, Smoky, Earthy.)
+5. **Tasting notes** — a flow-laid grid of all eight `TastingTag` values, **horizontally centered** within the column (`FlowLayout(spacing: 6, alignment: .center)`). Multi-select. (Tag set: Chocolate, Caramel, Fruity, Citrus, Floral, Nutty, Smoky, Earthy.)
 6. **Rating** — five stars (`PSStars`), bound to an Int 0–5.
 7. **Photo + Date card** — `PSPhotoSourceMenu` (Take Photo / Choose from Photos action sheet, see §14), with thumbnail + Change/Add/× actions. Date defaults to `.now` and is editable via a compact `DatePicker`.
 8. **Notes** — multi-line `TextEditor` over the card background, with placeholder.
-9. **Save shot button** — disabled unless bean + machine + grinder are all selected. Briefly flashes "SAVED ✓" after success and resets the form (timer, rating, extraction, tags, notes, photo, date back to `.now`).
+9. **Save shot button** — disabled unless bean + machine + grinder are all selected. Briefly flashes "SAVED ✓" after success and resets the form (timer, rating, extraction, tags, notes, photo, date back to `.now`, grind cleared then re-populated from the still-selected bean's recipe). Equipment selection is preserved across saves; the slider values for dose/yield/temp/pressure are also preserved.
 
-**After saving:** if the selected bean's recipe is missing any of `dose`/`yield`/`temp`/`pullPressure`, an alert "Save as recipe for {bean name}?" prompts the user. Tapping **Save Recipe** writes the shot's values into the bean's recipe, **only filling nil fields** — values the user has already set on the recipe are never overwritten. **Skip** dismisses without changes.
+**After saving:** at most one of two prompts may appear (mutually exclusive):
+
+- **"Save recipe?"** — fires when the bean's recipe is missing any of `dose`/`yield`/`temp`/`pullPressure`. Title: `Save recipe?`, message: `Save these settings as the recipe for {bean name}?`, buttons: **Save Recipe** / **Skip**. Save writes the shot's values into the bean's recipe **only filling nil fields** — including `grind`, `preInfTime`, and `pullTime` when the shot has a value for them — and never overwrites an already-set field.
+- **"Adjust recipe?"** — fires when the recipe is complete (all four required fields non-nil), the just-saved shot's rating is `>= max(rating)` across the bean's other shots, AND any logged value differs from the recipe. Difference rules: `dose` and `yield` use **±10% tolerance** of the recipe value; `waterTemp` and `pullPressure` use exact comparison (epsilon `0.01`); `preInfTime` and `pullTime` only count as differing when the recipe field is non-nil, the user actually used the timer for that track, and the logged time falls outside the green window (±1 s pre, ±3 s pull). Title: `Adjust recipe?`, message: `This pull matches or beats your best for {bean name}. Update the recipe with these settings?`, buttons: **Update Recipe** / **Skip**. Update **overwrites all four required fields** unconditionally, plus `grind`/`preInfTime`/`pullTime` whenever the shot has a value for them (skip if the shot value is absent — never write nil over an existing recipe value).
+
+If neither condition is met, no prompt appears. Both prompts use `Bean.shots` (which already includes the just-inserted shot) when computing the rating maximum.
 
 **Keyboard handling:** the scroll view uses `.scrollDismissesKeyboard(.interactively)` plus a `simultaneousGesture(TapGesture)` that calls `dismissKeyboard()` (UIKit `resignFirstResponder` shim), so tapping outside the manual-time entry field dismisses its keyboard immediately. See §15 for the global "select all on focus" behavior that applies to every editable text/numeric field.
 
@@ -112,16 +117,16 @@ List of `BeanRowCard`s sorted by bag number descending. Each card shows: photo p
 - Bag photo (or placeholder if `bean.photoData` is nil) — 4:3 at the top
 - Name + "BAG #X" + roaster line
 - Roast badge + process chip + optional Single Origin chip
-- **Rating trend chart** — `RatingChart`, a Canvas-drawn sparkline of every shot for this bean ordered by date
+- **Rating trend chart** — `RatingChart`, a Path-drawn line chart. The visible viewport sizes for **10 slots** (most-recent shots fill from the right; if fewer than 10 shots exist, points sit on the left and the right slots stay empty). When more than 10 shots exist the chart is **horizontally scrollable** (`ScrollView(.horizontal)` with a fixed Y-axis column outside the scroll area) and starts scrolled to the trailing edge so the newest shots are visible. The line is a uniform **Catmull-Rom curve** (factor `1/6`) built from `Path.addCurve(to:control1:control2:)` and **passes exactly through every data point** — interpolation, not approximation. Dots, gridlines, MM-DD x labels, and the translucent fill below the curve carry over from the original sparkline.
 - Dates card: Roast date, Purchase date
 - Notes card (if any)
 - **Recipe card** — inline-editable. Tap "Edit" to flip the recipe block into edit mode (Cancel / Save). The recipe object lives as JSON `Data` on the bean; see §4. Each row shows "—" when its underlying field is nil.
 - Footer: shot count + average rating
 
 **Bean detail (edit mode):**
-Top-level Edit toggles all bean metadata (name, roaster, single-origin toggle, process pills with inline animated "Specify" reveal when **Other** is chosen, roast pills, dates, **Photo** card via `PhotoEditCard`, notes). The recipe has its own separate Edit flow (mid-page) so users can dial in a recipe without entering the full edit flow. Bottom: red **Delete bean** button. Confirmation: *"Delete {bean name}? All associated pulls will be deleted too. N shots will be removed."* Implemented via SwiftData `@Relationship(deleteRule: .cascade, inverse: \Shot.bean)`.
+Top-level Edit toggles all bean metadata (name, roaster, single-origin toggle, process pills inside a `PSCard` with an inline "Specify" text row revealed below the pills when **Other** is chosen — pills + reveal share the same card so the row participates in normal flow and never overlaps the Roast Level section below; roast pills inside their own matching `PSCard`; dates, **Photo** card via `PhotoEditCard`, notes). The recipe has its own separate Edit flow (mid-page) so users can dial in a recipe without entering the full edit flow. Bottom: red **Delete bean** button. Confirmation: *"Delete {bean name}? All associated pulls will be deleted too. N shots will be removed."* Implemented via SwiftData `@Relationship(deleteRule: .cascade, inverse: \Shot.bean)`.
 
-**Add bean form** — full-screen sheet over the page background. Bag number is auto-assigned (`AppSettings.nextBagNumber`) and shown in an accent banner. Sections: Identity, Single Origin toggle, Process pills (with inline animated "specify" reveal when Other is selected — bound to `processOther`), Roast Level pills, Dates (real `DatePicker`s), **Photo card** (`PhotoEditCard` over `PSPhotoSourceMenu`), Notes, Recipe block (editable). Save creates the bean (with optional `photoData`) and increments `nextBagNumber`. Cancel discards.
+**Add bean form** — full-screen sheet over the page background. Bag number is auto-assigned (`AppSettings.nextBagNumber`) and shown in an accent banner. Sections: Identity (Bean Name + Roaster), Single Origin toggle, **Process card** (pills inside a `PSCard`; selecting **Other** reveals an inline "Specify process" text row inside the same card with a 0.5pt divider above), **Roast Level card** (pills inside a matching `PSCard` for visual consistency with Process), Dates (real `DatePicker`s), **Photo card** (`PhotoEditCard` over `PSPhotoSourceMenu`), Notes, Recipe block (editable). **Recipe preload from existing bag** — as the user types Name and Roaster, the form looks for an existing bean whose name AND roaster match (case-insensitive, trimmed); when a match is found, the most recent matching bean's `recipe` is copied into the draft. The match is tracked by `persistentModelID`, so re-typing the same combination never overwrites in-progress recipe edits, but switching to a different match does refresh. Save creates the bean (with optional `photoData`) and increments `nextBagNumber`. Cancel discards.
 
 ### 3.4 Hardware
 
@@ -170,7 +175,7 @@ Presented from the **View Recipe** chip on the Log screen's Source card (when a 
 
 Header: bean name, "BAG #X · RECIPE".
 
-Body: one card with eight rows — Grind, Dose (g), Yield (g), Water Temp (°C/°F), Pre-Infusion Time (s), Pre-Infusion Pressure (bar), Pull Time (s), Pull Pressure (bar). Fields whose `Recipe` value is nil display "—".
+Body: one card with eight rows — Grind, Dose (g), Yield (g), Water Temp (°C/°F), Pre-Infusion Time (s), Pre-Infusion Pressure (bar), Pull Time (s), Pull Pressure (bar). Fields whose `Recipe` value is nil display "—". `RecipeBlock` (used inline on the Bean detail and add-bean form) shows the same set of rows in the same order.
 
 **Edit mode** — top-left **Edit** button toggles every row to a focused decimal/text input bound to a draft `Recipe`. Top-right shows **Save** (writes the draft back to `bean.recipe` via the JSON encode/decode path; only enabled when the draft differs from the saved recipe) and **Cancel** (discards the draft). The temperature row converts on display and on commit so the user always types in their chosen unit while storage stays in Celsius.
 
@@ -320,11 +325,11 @@ struct Recipe {
 `init(from: Decoder)` decodes every key with `decodeIfPresent`; a missing or null key decodes to nil. Old bean records that pre-date a field decode cleanly with that field as nil.
 
 **Every read site must guard for nil before using a value.** Anything that previously assumed a default (e.g. "the slider preloads to 18 g") now no-ops when the corresponding field is nil:
-- The Log screen's bean preload sets each slider only when its recipe field is non-nil; nil leaves the slider at its current value.
-- The "Save as recipe?" alert (§3.1) and `RecipeSheet` (§3.7) treat nil as "not specified" — the alert prompts when *any* of dose/yield/temp/pullPressure is nil, and only fills nil fields.
-- Timer green-target windows render only when `recipe.preInfTime` / `recipe.pullTime` are non-nil (§6).
+- The Log screen's bean preload sets each slider only when its recipe field is non-nil; nil leaves the slider at its current value. The Grind Setting field preloads from `recipe.grind` when non-nil and clears when nil.
+- The "Save recipe?" / "Adjust recipe?" alerts (§3.1) and `RecipeSheet` (§3.7) treat nil as "not specified" — Save fires when *any* of dose/yield/temp/pullPressure is nil and only fills nil fields; Adjust fires when the recipe is complete, the rating qualifies, and a value differs (dose/yield use ±10% tolerance, timer fields use the green window).
+- Timer green-target windows and the green-bar/button visual (§6) render only when `recipe.preInfTime` / `recipe.pullTime` are non-nil.
 
-The bean's full recipe is shown and editable on the Bean detail card and in the Log screen's `RecipeSheet`.
+The bean's full recipe is shown and editable on the Bean detail card (`RecipeBlock`) and in the Log screen's `RecipeSheet`. Both surface the same set of rows in the same order — Grind, Dose, Yield, Water Temp, Pre-Infuse Time, Pre-Infuse Pressure, Pull Time, Pull Pressure.
 
 ### 4.6 Enums
 
@@ -378,7 +383,7 @@ Defined in `Views/Components/` and used everywhere:
 - `PSNavBar` — top bar (small or large variant), with leading and trailing slots
 - `PSTabBar` — custom rounded chrome bar; the Beans tab uses a Canvas-drawn three-bean cluster (`BeanIcon`); the Hardware tab tries `espresso.machine` and falls back to `cup.and.saucer.fill`
 - `PSIconBtn`, `PSTextBtn`, `PSToggle`, `PSRoastBadge`, `IconChip`, `StatCard`
-- `FlowLayout` — custom `Layout` for tag clouds
+- `FlowLayout` — custom `Layout` for tag clouds. `alignment: HorizontalAlignment` parameter (`.leading` default; supports `.center` and `.trailing`) is set per-callsite — the Log screen's Tasting notes use `.center`, Process pills in the Bean form use the default `.leading`. Two-pass placement: first pass groups subviews into lines by width, second pass places each line with the requested horizontal alignment.
 - `PSPageBackground` — radial-gradient warm wash, full screen
 - `PSContentColumn` — caps content to 560pt centered (iPad layout)
 - `PSPhotoSourceMenu` — universal photo entry point (§14): action sheet over Take Photo / Choose from Photos, falls back to Photos-only when the camera is unavailable
@@ -409,6 +414,10 @@ Each track's full width represents `trackMax` seconds:
 
 The targets and bands re-derive automatically when the user changes the bean mid-session; nothing is cached.
 
+### Green-window visual feedback
+
+While a track's elapsed time falls inside its green window, the entire elapsed-fill bar swaps from the accent gradient to a solid `palette.good` fill (with a soft `palette.good.opacity(0.45)` shadow when the track is active). Once the elapsed time crosses the upper bound, the bar reverts to the accent gradient — it never goes red. The same window check colors the **FIRST DRIP** and **DONE** buttons green (text turns white, accent stroke removed) for the current phase only; disabled buttons never show the green state. All checks return `false` when the corresponding `Recipe` field is nil, so the green visual only ever appears when the user has set a target.
+
 ### State machine
 
 ```
@@ -434,7 +443,7 @@ Tapping the value label on either track (when timer is not running) flips it int
 
 ### Shot save
 
-On Save, the timer's `preEnd` and `(pullEnd - preEnd)` are written to `Shot.preInfusion` and `Shot.pull` respectively, then the timer resets along with the form fields.
+On Save, the timer's `preEnd` and `(pullEnd - preEnd)` are **rounded to one decimal place** (`(value * 10).rounded() / 10`) and written to `Shot.preInfusion` and `Shot.pull` respectively. The same rounded values flow into the recipe-prompt (§3.1) so any saved/adjusted recipe also stays at 0.1 s precision. The timer then resets along with the form fields.
 
 ---
 

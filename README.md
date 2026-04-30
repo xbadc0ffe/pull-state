@@ -4,10 +4,12 @@ A precision logbook for your espresso practice — track every shot, dial in you
 
 ## Features
 
-- Log shots with a dual-track pre-infusion + pull timer, with green target windows when the bean's recipe sets a target time
-- Per-bean recipes that auto-preload dose, yield, temperature, and pressure on the Log screen — and an "Save as recipe?" prompt that fills in missing fields after a shot
+- Log shots with a dual-track pre-infusion + pull timer; the bar and First Drip / Done buttons turn green while you're inside the bean's target window
+- Per-bean recipes that auto-preload grind, dose, yield, temperature, and pressure on the Log screen
+- After each shot, a smart prompt either offers to **save** the recipe (when fields are missing) or to **adjust** it (when the pull matches or beats your best for that bean and the values differ from the saved recipe — dose/yield compared with ±10% tolerance)
+- Equipment pre-fills from your most recent shot, and a new bag with the same Name + Roaster as a previous bean inherits that bean's recipe
 - View / edit a bean's full recipe from the Log screen via a dedicated sheet
-- Bean library with rating-trend sparklines, photos, and editable recipes
+- Bean library with rating trend charts (10 most recent shots, horizontally scrollable, smooth Catmull-Rom curve), photos, and editable recipes
 - Hardware library for espresso machines and grinders, with photos, shot counts, and an autocomplete catalog of common manual / lever machines and grinders
 - Filter and sort shot history by extraction, rating, tasting notes, bean, machine, or grinder
 - Light / dark / system appearance and Celsius / Fahrenheit — selectable on first run and from About
@@ -36,3 +38,4 @@ MIT — see [LICENSE](LICENSE).
 ## Contact
 
 **badc0ffe** · github.com/xbadc0ffe/pull-state
+info@badc0ffe.net

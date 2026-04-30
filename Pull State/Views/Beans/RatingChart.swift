@@ -1,5 +1,10 @@
 import SwiftUI
 
+/// Per-bean rating trend chart shown on the Bean detail. Sized for ten visible
+/// shots; once the bean has more than ten, the plot becomes horizontally
+/// scrollable and starts scrolled to the trailing edge so the newest pulls
+/// are visible. The line is a Catmull-Rom curve (factor 1/6) that passes
+/// exactly through every point — see DESIGN.md §3.3.
 struct RatingChart: View {
     let points: [BeanRatingPoint]
     @Environment(\.psPalette) private var palette

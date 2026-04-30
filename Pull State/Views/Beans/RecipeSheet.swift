@@ -1,6 +1,11 @@
 import SwiftUI
 import SwiftData
 
+/// "View Recipe" sheet presented from the Log screen's Source card. Read mode
+/// shows the bean's eight recipe rows (nil values render as "—"); edit mode
+/// binds rows to a draft `Recipe` and commits on Save. Closing while edits
+/// are dirty triggers a discard-confirmation alert. Temperature rows convert
+/// to/from Celsius at the UI boundary so storage stays canonical.
 struct RecipeSheet: View {
     @Bindable var bean: Bean
     let onClose: () -> Void

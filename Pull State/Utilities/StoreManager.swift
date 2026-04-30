@@ -5,6 +5,12 @@ import StoreKit
 // Run → Options → StoreKit Configuration → PullState.storekit
 // so the tip product loads from Resources/PullState.storekit
 // without needing a live App Store Connect entry.
+
+/// StoreKit 2 wrapper for the single non-consumable "Buy Me a Coffee" tip. Loads
+/// the product eagerly on init, runs verified purchases via async/await, and
+/// exposes `hasPriorEntitlement()` so the About sheet can restore the tipped
+/// state on a fresh install without forcing a re-purchase. No app feature is
+/// gated behind this product.
 @Observable
 @MainActor
 final class StoreManager {

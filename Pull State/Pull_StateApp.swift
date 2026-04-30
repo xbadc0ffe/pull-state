@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+/// App entry point. Bootstraps the SwiftData `ModelContainer` (eagerly creating
+/// Application Support so SwiftData doesn't dump a CoreData diagnostic on the
+/// very first launch), installs the global select-all-on-focus observer, and
+/// hands off to `RootView`.
 @main
 struct Pull_StateApp: App {
     let container: ModelContainer

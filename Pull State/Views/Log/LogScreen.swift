@@ -5,6 +5,12 @@ import Combine
 import UIKit
 #endif
 
+/// The Log tab — primary surface for timing and saving a shot. Owns the timer
+/// state machine (idle/running/done × pre/pull), the source pickers
+/// (pre-selected from the most recently logged shot), the slider settings
+/// (preloaded from the selected bean's recipe, only filling fields whose
+/// recipe value is non-nil), and the post-save recipe prompt — see DESIGN.md
+/// §3.1 for the full save → prompt logic.
 struct LogScreen: View {
     let onShowAbout: () -> Void
 
@@ -775,9 +781,16 @@ struct LogScreen: View {
     }
 }
 
+/// Three-state timer machine: `.idle` → `.running` → `.done` → reset → `.idle`.
 enum TimerState { case idle, running, done }
+
+/// Active sub-track within the running timer.
 enum TimerPhase { case pre, pull }
 
+/// Snapshot of every value the recipe-prompt logic compares against the bean's
+/// saved recipe. `*Used` flags distinguish "user actually used the timer for
+/// this track" from "value defaults to 0", so `applyRecipePrompt` never
+/// overwrites an existing recipe time with a zero from an unused track.
 struct RecipePromptValues: Equatable {
     let dose: Double
     let yield: Double
@@ -792,11 +805,15 @@ struct RecipePromptValues: Equatable {
     var grindUsed: Bool { !grind.isEmpty }
 }
 
+/// Which post-save alert to show. Mutually exclusive with each other and with
+/// "no prompt at all" — see DESIGN.md §3.1 for the rules.
 enum RecipePromptKind {
     case save
     case adjust
 }
 
+/// Post-save prompt payload: which kind of prompt to show, the bean to update,
+/// and the recipe values pulled from the just-saved shot.
 struct RecipePrompt {
     let kind: RecipePromptKind
     let bean: Bean

@@ -1,5 +1,10 @@
 import SwiftUI
 
+/// Stepped slider with an inline editable readout. There is no hidden `Slider`
+/// — the visible thumb is the only thing that exists, and a `DragGesture` on
+/// the visual track maps drag x-position to a stepped, clamped value. Tap on
+/// the readout flips the row into a focused decimal text field that commits
+/// on submit/blur.
 struct SliderField: View {
     let label: String
     @Binding var value: Double

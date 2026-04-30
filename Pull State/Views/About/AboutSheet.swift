@@ -1,5 +1,10 @@
 import SwiftUI
 
+/// About sheet presented from any tab's "…" icon. Houses the identity card
+/// (Built by / Contact / GitHub / Temperature / Appearance switches), the
+/// non-consumable tip-jar IAP, and a footer tagline. On appear it queries
+/// `StoreManager.hasPriorEntitlement()` so a re-installed user keeps the
+/// "tipped" state without re-purchasing.
 struct AboutSheet: View {
     @Bindable var settings: AppSettings
     @Environment(\.psPalette) private var palette
@@ -179,6 +184,8 @@ struct AboutSheet: View {
     }
 }
 
+/// Capsule segmented control for `AppearanceMode`. Used by both the About sheet
+/// and the Onboarding welcome step.
 struct ModeSwitch: View {
     @Binding var appearance: AppearanceMode
     @Environment(\.psPalette) private var palette
@@ -207,6 +214,8 @@ struct ModeSwitch: View {
     }
 }
 
+/// Capsule segmented control for `TemperatureUnit`. Mirrors `ModeSwitch` and
+/// is used by both the About sheet and the Onboarding welcome step.
 struct TempUnitSwitch: View {
     @Binding var unit: TemperatureUnit
     @Environment(\.psPalette) private var palette

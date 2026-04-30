@@ -1,5 +1,8 @@
 import SwiftUI
 
+/// Eight-row recipe card used inline on the Bean detail and in the Add Bean
+/// form. Read-only mode shows "—" for nil fields; edit mode binds each row
+/// to a draft `Recipe` so committing happens at the parent's Save action.
 struct RecipeBlock: View {
     @Binding var recipe: Recipe
     let editing: Bool

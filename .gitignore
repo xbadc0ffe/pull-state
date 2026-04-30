@@ -1,2 +1,20 @@
+# Personal / agent files
 CLAUDE.md
 prompts/
+.claude/
+
+# macOS
+.DS_Store
+
+# Xcode user-specific data
+*.xcuserstate
+xcuserdata/
+DerivedData/
+build/
+
+# Apple keys / signing
+*.p8
+*.p12
+AuthKey_*.p8
+*.cer
+*.mobileprovision

@@ -105,7 +105,7 @@ If neither condition is met, no prompt appears. Both prompts use `Bean.shots` (w
 - Detail timestamp footer
 
 **Shot detail (edit mode):**
-Same screen, but every field becomes editable: source pickers, extraction, tags (rendered in `FlowLayout` matching Log spacing), six sliders (dose, yield, temp, pressure, pre-infusion, pull) with the same ranges as the Log screen and the same C/F display conversion, photo (`PhotoEditCard` over `PSPhotoSourceMenu`), date picker, notes editor. Cancel + Save in the nav bar trailing slot. A red **Delete shot** button at the bottom triggers a confirmation alert.
+Same screen, but every field becomes editable: source pickers, extraction, tags (rendered in `FlowLayout` matching Log spacing), six sliders (dose, yield, temp, pressure, pre-infusion, pull) with the same ranges as the Log screen and the same C/F display conversion, photo (inline card over `PSPhotoSourceMenu` — same shape as the Log screen's photo row, not `PhotoEditCard`), date picker, notes editor. Cancel + Save in the nav bar trailing slot. A red **Delete shot** button at the bottom triggers a confirmation alert.
 
 ### 3.3 Beans
 
@@ -142,7 +142,7 @@ The Hardware tab icon uses the SF Symbol `espresso.machine` when available (iOS 
 
 **Hardware detail (edit mode):** Edit button in the nav bar trailing slot. Identity card with editable Name + Brand `PSTextInput`s, plus a **Photo** card (`PhotoEditCard`). Cancel + Save in the trailing slot.
 
-**Add hardware form** — full-screen sheet, kind-aware: same form for "Add Machine" and "Add Grinder". Name uses `OnbCombobox` driven by `HardwareCatalog` (substring case-insensitive match against name; selecting a suggestion auto-fills Brand via `HardwareCatalog.brand(forName:kind:)`, and Brand stays user-editable). Brand uses `OnbField`. The catalog covers manual/lever espresso machines and the common hand-grinder + electric-grinder ranges (Flair, Cafelat, Wacaco, La Pavoni, 1Zpresso, Commandante, Timemore, Kinu, Knock, Weber Workshops, Option-O, Fellow, Niche, DF, Baratza, Mazzer, Eureka, Fiorenzato, …). The user can type a fully custom name not in the catalog.
+**Add hardware form** — full-screen sheet, kind-aware: same form for "Add Machine" and "Add Grinder". Name uses `OnbCombobox` driven by `HardwareCatalog` (substring case-insensitive match against name; selecting a suggestion auto-fills Brand via `HardwareCatalog.brand(forName:kind:)`, and Brand stays user-editable). Brand uses `OnbField`. The catalog covers manual/lever espresso machines and the common hand-grinder + electric-grinder ranges (Flair, Cafelat, Wacaco, La Pavoni, 1Zpresso, Commandante, Timemore, Kinu, Knock, Weber Workshops, Option-O, Fellow, Niche, DF, Baratza, Mazzer, Eureka, Fiorenzato, …). The user can type a fully custom name not in the catalog. The Add form shows a non-interactive "Add a photo" card as a hint — photos are attached afterwards from the Hardware detail edit flow.
 
 ### 3.5 About sheet
 
@@ -387,7 +387,7 @@ Defined in `Views/Components/` and used everywhere:
 - `PSPageBackground` — radial-gradient warm wash, full screen
 - `PSContentColumn` — caps content to 560pt centered (iPad layout)
 - `PSPhotoSourceMenu` — universal photo entry point (§14): action sheet over Take Photo / Choose from Photos, falls back to Photos-only when the camera is unavailable
-- `PhotoEditCard` — thumbnail row with Add/Change + ✕ remove, used by Bean add/edit, Hardware edit, and Log
+- `PhotoEditCard` — thumbnail row with Add/Change + ✕ remove, used by Bean add/edit and Hardware edit. The Log and Shot edit screens use a custom inline card with the same affordances
 - `ModeSwitch` (Appearance) and `TempUnitSwitch` (Celsius/Fahrenheit) — capsule segmented controls used by both About and Onboarding
 
 Slider note: `SliderField` (in `Views/Log/`) does its own gesture handling — a `DragGesture(minimumDistance: 0)` over the visual track maps tap/drag x-position to a stepped, clamped value. There is no hidden `Slider` underneath; the visible thumb is the only thing that exists.
@@ -603,7 +603,7 @@ Camera availability is gated by `UIImagePickerController.isSourceTypeAvailable(.
 
 The wrapped `CameraImagePicker` writes the captured image as JPEG (`compressionQuality: 0.85`) into the bound `Data?`. All photo storage on the SwiftData side uses `@Attribute(.externalStorage)` (Bean, Equipment, Shot).
 
-`PhotoEditCard` composes `PSPhotoSourceMenu` into the standard thumbnail row used by the bean / hardware / shot edit cards: thumbnail (or `PSPlaceholder`) on the left, label + hint in the middle, and an Add/Change capsule plus an ✕ remove circle on the right.
+`PhotoEditCard` composes `PSPhotoSourceMenu` into the standard thumbnail row used by the bean and hardware edit cards: thumbnail (or `PSPlaceholder`) on the left, label + hint in the middle, and an Add/Change capsule plus an ✕ remove circle on the right. The Log screen and Shot edit screen wire `PSPhotoSourceMenu` into their own inline cards with matching affordances.
 
 **Info.plist keys** (added as `INFOPLIST_KEY_*` build settings on Debug + Release):
 - `NSCameraUsageDescription` — "Pull State uses the camera to take photos of beans, hardware, and shots."
@@ -631,7 +631,25 @@ Creates the `AppSettings` singleton on first launch only. The app starts empty �
 
 ---
 
-## 16. Deferred V2 Features
+## 16. Privacy & Security
+
+Pull State is local-only by design. No accounts, no backend, no network requests, no analytics, no third-party SDKs. Everything in this section is enforced by build configuration and the project layout — keep it that way.
+
+- **Privacy manifest** — `Pull State/PrivacyInfo.xcprivacy` declares `NSPrivacyTracking: false`, no tracking domains, no collected data types, no required-reason API access. App Store submissions assume this manifest is present and accurate.
+- **Encryption flag** — `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` on both Debug and Release. The app only relies on OS-level file protection — no custom crypto. Without this key App Store Connect re-asks the encryption question on every upload.
+- **File protection** — `Pull State/Pull State.entitlements` sets `com.apple.developer.default-data-protection = NSFileProtectionCompleteUnlessOpen`. Wired via `CODE_SIGN_ENTITLEMENTS` in both build configs. `UnlessOpen` (rather than `Complete`) keeps the SwiftData store readable while the device is locked but the app is foregrounded — required so the timer survives a screen-sleep mid-shot.
+- **Storage** — SwiftData store lives in the app's default Application Support directory (no App Group, no shared container). Photos use `@Attribute(.externalStorage)` so blobs live in the protected subdirectory rather than inline in the SQLite file. No `UserDefaults` writes anywhere — `AppSettings` is a SwiftData `@Model`.
+- **No File Sharing surfaces** — `UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace` are absent. The app sandbox is not exposed via Files or iTunes File Sharing.
+- **No ATS exceptions** — `NSAppTransportSecurity` is not set. The app makes zero network requests, so any ATS exception would be a smell.
+- **StoreKit verification** — `Utilities/StoreManager.swift` switches on `VerificationResult` for both purchase and restore; unverified transactions are explicitly discarded. Restore uses `Transaction.currentEntitlements` (not a local flag). `AppSettings.hasTipped` is a UI cache that's re-derived from `currentEntitlements` on every About-sheet appear — never the source of truth.
+- **No logging** — there are zero `print` / `NSLog` / `os.Logger` / `debugPrint` calls in the codebase. If logging is ever introduced, gate it behind `#if DEBUG` and keep user content (bean names, notes, ratings, transaction data, photo bytes, sandbox paths) out of the log entirely.
+- **Repo hygiene** — `SECURITY.md` at the repo root documents the disclosure path. `.gitignore` covers `.DS_Store`, `xcuserdata/`, `*.xcuserstate`, `DerivedData/`, `*.p8` / `*.p12` / `AuthKey_*.p8`, `*.cer`, `*.mobileprovision`. `CLAUDE.md` and `prompts/` stay gitignored.
+
+`REGISTER_APP_GROUPS = YES` is left in the build config in anticipation of the v2 Home Screen widget (§17) — without a matching `com.apple.security.application-groups` entitlement key, no app group is actually granted, so the flag is harmless until the widget lands.
+
+---
+
+## 17. Deferred V2 Features
 
 Per `CLAUDE.md`, **not** in v1 — do not implement until explicitly scoped:
 
@@ -652,6 +670,8 @@ These are deliberate omissions, not unbuilt features. The data model and archite
 ```
 Pull State/
 ├── Pull_StateApp.swift            (@main, Application Support bootstrap, ModelContainer, SelectAllOnFocus.install())
+├── Pull State.entitlements        (data-protection class — see §16)
+├── PrivacyInfo.xcprivacy          (no tracking, no collection — see §16)
 ├── Models/
 │   ├── Bean.swift                 (incl. photoData: Data?, recipe accessor)
 │   ├── Shot.swift                 (photoData: Data?)

@@ -1,6 +1,12 @@
 import SwiftUI
 import SwiftData
 
+/// Full-screen Add Bean sheet. Auto-stamps the next bag number, and as the
+/// user types Name + Roaster looks for an existing bean with the same
+/// (case-insensitive, trimmed) Name+Roaster — when one matches, its recipe is
+/// copied into the draft so a fresh bag of the same coffee inherits the
+/// dialed-in numbers. Match is tracked by `persistentModelID`, so re-typing
+/// the same combination doesn't clobber in-progress recipe edits.
 struct BeanAddForm: View {
     @Bindable var settings: AppSettings
     let onCancel: () -> Void

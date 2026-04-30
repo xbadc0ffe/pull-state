@@ -1,5 +1,12 @@
 import Foundation
 
+/// A bean's dialed-in target settings. Stored as JSON `Data` on `Bean.recipeData`
+/// rather than as a `@Model`. Every field is optional and there are no defaults
+/// — a fresh `Recipe()` is genuinely "nothing specified yet". Read sites must
+/// guard for nil; write sites that pre-fill recipes (the post-save "Save
+/// recipe?" / "Adjust recipe?" prompts on the Log screen) only touch fields
+/// the user has supplied a value for, and never overwrite an existing recipe
+/// field with nil. See DESIGN.md §3.1 and §4.5 for the full prompt logic.
 nonisolated struct Recipe: Codable, Equatable, Sendable {
     var grind: String?
     var dose: Double?
@@ -47,6 +54,8 @@ nonisolated struct Recipe: Codable, Equatable, Sendable {
     }
 }
 
+/// One data point on the per-bean rating trend chart — a (date, rating) pair
+/// derived from the bean's shot history. Computed on demand by `Bean.ratingTrend`.
 nonisolated struct BeanRatingPoint: Codable, Identifiable, Equatable, Sendable {
     var date: Date
     var rating: Int

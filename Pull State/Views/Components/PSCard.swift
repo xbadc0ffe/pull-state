@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Standard rounded card chrome. `soft: true` reduces the shadow so cards
+/// stacked inside a list don't feel heavy.
 struct PSCard<Content: View>: View {
     var soft: Bool = false
     @ViewBuilder var content: () -> Content

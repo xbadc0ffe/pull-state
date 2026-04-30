@@ -1,12 +1,17 @@
 import SwiftUI
 import SwiftData
 
+/// One choice in a `PickerRow`'s expanded list, identified by SwiftData's
+/// `PersistentIdentifier`.
 struct PickerOption: Identifiable, Hashable {
     let id: PersistentIdentifier
     let label: String
     let sub: String?
 }
 
+/// Inline-expanding picker row used by the Log screen and Shot edit's Source
+/// card. The row collapses by default and reveals its options below when
+/// tapped — keeps the entire shot setup on one scroll without modal hops.
 struct PickerRow: View {
     let label: String
     let value: String

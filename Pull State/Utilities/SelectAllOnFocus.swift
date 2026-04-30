@@ -1,3 +1,16 @@
+// SelectAllOnFocus.swift
+//
+// Intentional UIKit exception. SwiftUI offers no built-in modifier that says
+// "when this field gains focus, pre-select its existing content." Pull State
+// has many numeric fields (dose, yield, temperature, pressure, grind setting,
+// timer values) where a tap-to-replace flow is much faster than the default
+// tap-to-append behaviour. Implementing this view-by-view in SwiftUI would
+// require a UIViewRepresentable wrapper around UITextField; instead, this
+// utility hooks the system-wide text-editing notifications once at app launch
+// and applies `selectAll(_:)` to the field that just became first responder.
+//
+// `install()` is called from `Pull_StateApp.init()` and is idempotent — repeat
+// calls are no-ops. The observers stay alive for the entire app lifetime.
 import Foundation
 #if canImport(UIKit)
 import UIKit

@@ -1,6 +1,9 @@
 import SwiftUI
 import SwiftData
 
+/// Beans tab — list of bag rows sorted newest-bag-first. Empty state appears
+/// when the library is empty. Tapping a row pushes `BeanDetailView`; the +
+/// button presents `BeanAddForm`.
 struct BeansScreen: View {
     let onAdd: () -> Void
     let onShowAbout: () -> Void

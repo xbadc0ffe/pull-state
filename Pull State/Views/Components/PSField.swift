@@ -3,6 +3,9 @@ import SwiftUI
 import UIKit
 #endif
 
+/// One label/value row inside a `PSCard`. Handles its own bottom divider
+/// (suppressed when `last` is true) and an optional trailing `suffix` (used
+/// for unit hints and computed indicators like "1:2.10").
 struct PSField<Content: View>: View {
     let label: String
     var suffix: String? = nil
@@ -89,6 +92,8 @@ struct PSTextInput: View {
     }
 }
 
+/// Cross-platform shim for `.keyboardType(.decimalPad)` — applies on iOS, no-op
+/// on macOS where `keyboardType` does not exist.
 struct PSDecimalKeyboard: ViewModifier {
     let active: Bool
     func body(content: Content) -> some View {

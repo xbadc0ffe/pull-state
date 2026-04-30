@@ -1,5 +1,14 @@
 import SwiftUI
 
+/// The full set of warm-leather color tokens used across the app.
+///
+/// `PSPalette.light` and `PSPalette.dark` are hand-tuned per-token (no opacity
+/// hacks against `colorScheme`). The active palette is resolved against the
+/// current `ColorScheme` and pushed into the `\.psPalette` environment by
+/// `MainTabView`, so any view can simply read `@Environment(\.psPalette)`
+/// without prop-drilling. Sheet presentations do not inherit environment
+/// automatically — sheet builders must re-set `\.psPalette` (and `\.psTempUnit`)
+/// explicitly.
 struct PSPalette {
     let page: Color
     let surface: Color
@@ -94,6 +103,9 @@ extension EnvironmentValues {
     }
 }
 
+/// Typography helpers. Sizes are explicit `CGFloat`s rather than `.title`
+/// / `.body` so the layout matches the visual prototype, but they still pass
+/// through `Font.system(size:)` and respect Dynamic Type scaling.
 struct PSFont {
     static func display(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         .system(size: size, weight: weight, design: .serif)
@@ -106,6 +118,7 @@ struct PSFont {
     }
 }
 
+/// Date and duration formatters used by every screen.
 enum PSFmt {
     static func seconds(_ s: Double) -> String {
         guard s.isFinite else { return "0.0s" }

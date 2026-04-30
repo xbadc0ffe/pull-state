@@ -1,6 +1,10 @@
 import Foundation
 import SwiftData
 
+/// One bag of coffee. Owns its shot history (cascade-deleted with the bean) and
+/// carries a per-bag recipe stored as JSON `Data` (see `Recipe`). `bagNumber`
+/// is monotonic via `AppSettings.nextBagNumber` and is never decremented when a
+/// bean is deleted, so historical references in shot history stay stable.
 @Model
 final class Bean {
     var name: String

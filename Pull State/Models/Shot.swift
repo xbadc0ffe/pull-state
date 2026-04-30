@@ -1,6 +1,10 @@
 import Foundation
 import SwiftData
 
+/// One logged espresso pull. Holds the dialed-in numbers, the timer results,
+/// the user's tasting notes, and optional bean / machine / grinder references.
+/// The references are optional so deleting the underlying hardware (which is
+/// `.nullify`) leaves the shot data intact in History.
 @Model
 final class Shot {
     var date: Date

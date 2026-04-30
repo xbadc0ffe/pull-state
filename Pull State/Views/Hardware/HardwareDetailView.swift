@@ -4,6 +4,9 @@ import SwiftData
 import UIKit
 #endif
 
+/// Hardware detail screen — read mode shows photo, name, brand, live shot
+/// count, and date added. Edit mode allows name / brand / photo changes.
+/// Delete uses the `.nullify` rule so historical shots survive the deletion.
 struct HardwareDetailView: View {
     let hardwareID: PersistentIdentifier
     @Environment(\.modelContext) private var context

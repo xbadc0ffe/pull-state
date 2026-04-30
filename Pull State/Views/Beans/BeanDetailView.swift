@@ -9,11 +9,12 @@ struct BeanDetailView: View {
     @Environment(\.colorScheme) private var scheme
 
     @Query private var beans: [Bean]
-    private var bean: Bean? { beans.first { $0.persistentModelID == beanID } }
+    private var bean: Bean? { beans.first }
 
     @State private var editing = false
     @State private var draft: Recipe = Recipe()
     @State private var showDeleteConfirm = false
+    @State private var recipeEditingFlag: Bool = false
 
     @State private var dName = ""
     @State private var dRoaster = ""
@@ -25,6 +26,12 @@ struct BeanDetailView: View {
     @State private var dPurchaseDate: Date = .now
     @State private var dNotes: String = ""
     @State private var dPhotoData: Data? = nil
+
+    init(beanID: PersistentIdentifier) {
+        self.beanID = beanID
+        let id = beanID
+        _beans = Query(filter: #Predicate<Bean> { $0.persistentModelID == id })
+    }
 
     var body: some View {
         ZStack {
@@ -213,8 +220,6 @@ struct BeanDetailView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 18)
     }
-
-    @State private var recipeEditingFlag: Bool = false
 
     @ViewBuilder
     private func recipeEditButton(for bean: Bean) -> some View {

@@ -138,7 +138,7 @@ private struct RecipeStringField: View {
                 .frame(width: 120)
                 .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 6))
             } else {
-                PSValueText(text: value?.isEmpty == false ? value! : "—", fontSize: 13.5)
+                PSValueText(text: (value?.isEmpty == false ? value : nil) ?? "—", fontSize: 13.5)
             }
         }
     }

@@ -12,7 +12,7 @@ struct ShotDetailView: View {
     @Query private var shots: [Shot]
     @Query(sort: \Bean.bagNumber, order: .reverse) private var beans: [Bean]
     @Query(sort: \Equipment.createdAt) private var equipment: [Equipment]
-    private var shot: Shot? { shots.first { $0.persistentModelID == shotID } }
+    private var shot: Shot? { shots.first }
 
     @State private var editing = false
     @State private var showDeleteConfirm = false
@@ -34,7 +34,11 @@ struct ShotDetailView: View {
     @State private var dGrinderID: PersistentIdentifier? = nil
     @State private var dPhotoData: Data? = nil
 
-    init(shotID: PersistentIdentifier) { self.shotID = shotID }
+    init(shotID: PersistentIdentifier) {
+        self.shotID = shotID
+        let id = shotID
+        _shots = Query(filter: #Predicate<Shot> { $0.persistentModelID == id })
+    }
 
     private var machines: [Equipment] { equipment.filter { $0.kind == .machine } }
     private var grinders: [Equipment] { equipment.filter { $0.kind == .grinder } }

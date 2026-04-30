@@ -12,7 +12,7 @@ struct HardwareDetailView: View {
     @Environment(\.colorScheme) private var scheme
 
     @Query private var equipment: [Equipment]
-    private var item: Equipment? { equipment.first { $0.persistentModelID == hardwareID } }
+    private var item: Equipment? { equipment.first }
 
     @State private var editing = false
     @State private var showDeleteConfirm = false
@@ -20,6 +20,12 @@ struct HardwareDetailView: View {
     @State private var dName: String = ""
     @State private var dBrand: String = ""
     @State private var dPhotoData: Data? = nil
+
+    init(hardwareID: PersistentIdentifier) {
+        self.hardwareID = hardwareID
+        let id = hardwareID
+        _equipment = Query(filter: #Predicate<Equipment> { $0.persistentModelID == id })
+    }
 
     var body: some View {
         ZStack {

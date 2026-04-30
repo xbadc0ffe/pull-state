@@ -14,7 +14,10 @@ struct LogScreen: View {
 
     @Query(sort: \Equipment.createdAt, order: .reverse) private var allEquipment: [Equipment]
     @Query(sort: \Bean.createdAt, order: .reverse) private var beans: [Bean]
-    @Query(sort: \Shot.date, order: .reverse) private var allShots: [Shot]
+
+    // Stable per-instance tick publisher; recreating it inside body would
+    // force SwiftUI to re-subscribe on every render.
+    private let tick = Timer.publish(every: 0.067, on: .main, in: .common).autoconnect()
 
     @State private var machineID: PersistentIdentifier?
     @State private var grinderID: PersistentIdentifier?
@@ -108,7 +111,11 @@ struct LogScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            let lastShot = allShots.first
+            var lastShotDescriptor = FetchDescriptor<Shot>(
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+            lastShotDescriptor.fetchLimit = 1
+            let lastShot = (try? context.fetch(lastShotDescriptor))?.first
             if machineID == nil {
                 machineID = lastShot?.machine?.persistentModelID ?? machines.first?.persistentModelID
             }
@@ -123,7 +130,7 @@ struct LogScreen: View {
         .onChange(of: beanID) { _, _ in
             preloadFromBean()
         }
-        .onReceive(Timer.publish(every: 0.067, on: .main, in: .common).autoconnect()) { now in
+        .onReceive(tick) { now in
             guard tState == .running, let startInstant else { return }
             elapsed = now.timeIntervalSince(startInstant)
         }
@@ -325,8 +332,8 @@ struct LogScreen: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 4)
             }
-            if selectedBean != nil {
-                Text("Loaded from \(selectedBean!.name) recipe")
+            if let bean = selectedBean {
+                Text("Loaded from \(bean.name) recipe")
                     .font(PSFont.mono(10))
                     .tracking(0.6)
                     .foregroundStyle(palette.inkMuted)

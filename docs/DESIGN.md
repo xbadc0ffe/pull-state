@@ -651,7 +651,7 @@ These are deliberate omissions, not unbuilt features. The data model and archite
 
 ```
 Pull State/
-├── Pull_StateApp.swift            (@main, ModelContainer, SelectAllOnFocus.install())
+├── Pull_StateApp.swift            (@main, Application Support bootstrap, ModelContainer, SelectAllOnFocus.install())
 ├── Models/
 │   ├── Bean.swift                 (incl. photoData: Data?, recipe accessor)
 │   ├── Shot.swift                 (photoData: Data?)

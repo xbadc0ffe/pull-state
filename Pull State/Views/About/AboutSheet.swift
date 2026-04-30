@@ -55,13 +55,15 @@ struct AboutSheet: View {
                                 .minimumScaleFactor(0.8)
                         }
                         PSField(label: "GitHub") {
-                            Link(destination: URL(string: "https://github.com/xbadc0ffe/pull-state")!) {
-                                Text("github.com/xbadc0ffe/pull-state")
-                                    .font(PSFont.mono(13, weight: .semibold))
-                                    .foregroundStyle(palette.accent)
-                                    .underline()
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.65)
+                            if let url = URL(string: "https://github.com/xbadc0ffe/pull-state") {
+                                Link(destination: url) {
+                                    Text("github.com/xbadc0ffe/pull-state")
+                                        .font(PSFont.mono(13, weight: .semibold))
+                                        .foregroundStyle(palette.accent)
+                                        .underline()
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.65)
+                                }
                             }
                         }
                         PSField(label: "Temperature") {

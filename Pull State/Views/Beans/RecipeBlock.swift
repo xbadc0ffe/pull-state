@@ -49,7 +49,7 @@ private struct RecipeRow: View {
                     .frame(width: 90)
                     .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 6))
                 } else {
-                    Text(text?.isEmpty == false ? text! : "—")
+                    Text((text?.isEmpty == false ? text : nil) ?? "—")
                         .font(PSFont.mono(13.5, weight: .semibold))
                         .foregroundStyle(palette.ink)
                 }

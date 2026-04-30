@@ -1,5 +1,10 @@
 import SwiftUI
 
+/// Two-pass tag-cloud layout used for tasting-note pills and process pills.
+/// First pass groups subviews into lines that fit the proposed width; second
+/// pass places each line with the requested `alignment`. SwiftUI's built-in
+/// `LazyVGrid` would force all items to the widest column — this layout sizes
+/// each pill to its label and wraps freely.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
     var lineSpacing: CGFloat = 8

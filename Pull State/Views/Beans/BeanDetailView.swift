@@ -1,6 +1,11 @@
 import SwiftUI
 import SwiftData
 
+/// Bean detail screen. Top-level Edit toggles every metadata field
+/// (name, roaster, origin/process/roast, dates, photo, notes) into edit mode;
+/// the recipe card has its own separate Edit flow so users can adjust a
+/// recipe inline without entering the full edit. Delete cascades the bean's
+/// shots — confirmation copy reflects the count.
 struct BeanDetailView: View {
     let beanID: PersistentIdentifier
     @Environment(\.modelContext) private var context

@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+/// Top-level scene content. Decides between onboarding and the main tab UI
+/// based on `AppSettings.hasCompletedOnboarding`, and applies the user's
+/// chosen `preferredColorScheme`. Triggers `SeedData.installIfNeeded` on
+/// appear so the singleton settings row exists.
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query private var settingsQuery: [AppSettings]

@@ -1,6 +1,11 @@
 import SwiftUI
 import SwiftData
 
+/// Full-screen Add Hardware sheet, kind-aware (machine or grinder). Name uses
+/// `OnbCombobox` driven by `HardwareCatalog`; selecting a suggestion auto-fills
+/// the Brand field, but the user can also type a fully custom model. The
+/// "Add a photo" card on this form is currently a non-interactive hint —
+/// photos are attached afterwards from the Hardware detail edit flow.
 struct HardwareAddForm: View {
     let kind: EquipmentKind
     let onCancel: () -> Void

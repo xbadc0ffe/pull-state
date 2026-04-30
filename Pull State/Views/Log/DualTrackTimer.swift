@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// Two stacked progress tracks (pre-infusion + pull) plus a total readout and
+/// status badge. Each track scales so the bean's recipe target sits at the
+/// 75% mark of the bar; when no target is set, the track falls back to fixed
+/// scaling (10s pre / 30s pull) and the green target band is hidden. While
+/// elapsed time is inside the green window, the bar fills with `palette.good`
+/// instead of the accent gradient — see DESIGN.md §6.
 struct DualTrackTimer: View {
     let preInfusion: Double
     let pullTime: Double
@@ -91,6 +97,9 @@ struct DualTrackTimer: View {
     }
 }
 
+/// One horizontal track inside `DualTrackTimer`. Owns its own manual-entry
+/// text-field state so the user can type a value retroactively when the timer
+/// wasn't used.
 struct TimerTrack: View {
     let label: String
     let value: Double
@@ -207,6 +216,9 @@ struct TimerTrack: View {
     }
 }
 
+/// Square button used for START / FIRST DRIP / DONE in the timer card. The
+/// `inGreenWindow` flag makes the active button render green when the elapsed
+/// time is within the bean's recipe target window.
 struct TimerBtn: View {
     let label: String
     let primary: Bool

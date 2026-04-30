@@ -1,6 +1,11 @@
 import Foundation
 import SwiftData
 
+/// A piece of espresso gear — either a machine or a grinder, distinguished by
+/// `kind`. One model serves both because their per-shot relationship to `Shot`
+/// has the same shape; only one of `machineShots` / `grinderShots` is populated
+/// for any given instance. Delete rule is `.nullify` so historical shots
+/// survive a deletion with their `machine` / `grinder` reference cleared.
 @Model
 final class Equipment {
     var name: String

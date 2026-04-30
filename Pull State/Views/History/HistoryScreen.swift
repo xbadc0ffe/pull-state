@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+/// History tab — scrollable list of shots with three header stat cards, a
+/// filter sheet (extraction, tasting tags AND-matched, min rating, bean,
+/// machine, grinder), and a sort sheet. Empty state renders when no shots
+/// exist; "no shots match" renders when filters exclude everything.
 struct HistoryScreen: View {
     let onShowAbout: () -> Void
 

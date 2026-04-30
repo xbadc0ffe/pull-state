@@ -1,6 +1,9 @@
 import SwiftUI
 import SwiftData
 
+/// Hardware tab — two stacked sections (Espresso Machines, Grinders) with a
+/// per-section "+ Add" button. Cards show the live shot count via the inverse
+/// SwiftData relationship, so the count updates without a denormalized field.
 struct HardwareScreen: View {
     let onAdd: (EquipmentKind) -> Void
     let onShowAbout: () -> Void

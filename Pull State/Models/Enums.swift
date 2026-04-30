@@ -1,5 +1,7 @@
 import Foundation
 
+/// User-tagged flavor extraction, single-select. Drives the colored pill on
+/// shot cards and the History filter.
 enum Extraction: String, CaseIterable, Codable, Identifiable {
     case sour = "Sour"
     case perfect = "Perfect"
@@ -8,6 +10,7 @@ enum Extraction: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Bean roast level. Surfaced as a colored pip on `PSRoastBadge`.
 enum Roast: String, CaseIterable, Codable, Identifiable {
     case light = "Light"
     case medium = "Medium"
@@ -16,6 +19,8 @@ enum Roast: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Bean processing method. `.other` reveals an inline "Specify" text field
+/// that writes to `Bean.processOther`.
 enum BeanProcess: String, CaseIterable, Codable, Identifiable {
     case washed = "Washed"
     case natural = "Natural"
@@ -26,6 +31,8 @@ enum BeanProcess: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Discriminator for `Equipment` (one model serves both machines and grinders).
+/// Carries kind-specific copy used by the add/edit forms and the Hardware tab.
 enum EquipmentKind: String, Codable, CaseIterable, Identifiable {
     case machine
     case grinder
@@ -39,6 +46,9 @@ enum EquipmentKind: String, Codable, CaseIterable, Identifiable {
     var exampleBrandPlaceholder: String { self == .machine ? "Flair Espresso" : "1Zpresso" }
 }
 
+/// Closed set of tasting-note tags, multi-select. Persisted as lowercase raw
+/// values; `Shot.tags` decodes via `compactMap`, so unknown raw values from
+/// older tag-set versions are silently dropped instead of crashing.
 enum TastingTag: String, CaseIterable, Codable, Identifiable {
     case chocolate
     case caramel
@@ -54,6 +64,7 @@ enum TastingTag: String, CaseIterable, Codable, Identifiable {
     var label: String { rawValue.capitalized }
 }
 
+/// Sort options for the History tab.
 enum SortOrder: String, CaseIterable, Identifiable {
     case newest, oldest, highest, lowest
 

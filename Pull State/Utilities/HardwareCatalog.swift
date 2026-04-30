@@ -1,11 +1,24 @@
+// HardwareCatalog.swift
+//
+// Curated suggestion list for the espresso-machine and grinder pickers.
+// Coverage is intentionally narrow — manual / lever espresso machines and
+// the popular hand-grinder + electric-grinder ranges that the app's audience
+// actually uses. The combobox accepts any custom name not in this list, so
+// the catalog is suggestions only, never a closed set.
+//
+// When a suggestion is tapped, `brand(forName:kind:)` looks up the matching
+// brand so the Brand field auto-fills. The Brand field stays user-editable
+// after auto-fill.
 import Foundation
 
+/// One row in `HardwareCatalog` — a model name and its brand.
 struct HardwareEntry: Hashable, Identifiable {
     let name: String
     let brand: String
     var id: String { "\(brand)::\(name)" }
 }
 
+/// Static, in-memory autocomplete source for espresso machines and grinders.
 enum HardwareCatalog {
     static let machines: [HardwareEntry] = [
         HardwareEntry(name: "Flair Pro 3 Updated", brand: "Flair Espresso"),

@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+/// Four-step onboarding: Welcome → Hardware → Bean → Ready. On finish (and on
+/// "Skip setup" — same path), any non-empty entries are persisted, the bag
+/// counter increments if a bean was added, and `hasCompletedOnboarding`
+/// flips. The user lands on the Log tab.
 struct OnboardingFlow: View {
     @Bindable var settings: AppSettings
     @Environment(\.modelContext) private var context

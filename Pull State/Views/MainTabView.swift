@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+/// App shell. Owns the single `NavigationStack`, the four-tab switcher, and
+/// every modal sheet (About, Add Bean, Add Hardware). Pushes `\.psPalette`
+/// and `\.psTempUnit` into the environment for the whole tree, including
+/// every sheet (sheets do not inherit environment automatically).
 struct MainTabView: View {
     @Bindable var settings: AppSettings
     @Environment(\.colorScheme) private var scheme
@@ -83,12 +87,18 @@ struct MainTabView: View {
     }
 }
 
+/// Destinations pushable on the shared `NavigationStack`. Each case carries the
+/// `PersistentIdentifier` of the SwiftData model the detail view will load.
 enum NavRoute: Hashable {
     case shot(PersistentIdentifier)
     case bean(PersistentIdentifier)
     case hardware(PersistentIdentifier)
 }
 
+/// Cross-platform shim: hides the system navigation bar on iOS so detail views
+/// can render their own `PSNavBar`, and is a no-op on macOS where the modifier
+/// does not exist. The interactive swipe-back gesture is preserved by
+/// `Utilities/SwipeBackFix.swift`.
 struct HideNavBar: ViewModifier {
     func body(content: Content) -> some View {
         #if os(iOS)

@@ -74,6 +74,10 @@ struct OnbField: View {
     }
 }
 
+/// Combo input that combines a free-text field with a filtered suggestions
+/// dropdown. The user can pick a known model from `HardwareCatalog` or type a
+/// fully custom name; selecting a suggestion fires `onSelect` so the caller
+/// can auto-fill a related field (e.g. Brand).
 struct OnbCombobox: View {
     let label: String
     @Binding var text: String

@@ -3,6 +3,12 @@ import SwiftUI
 import UIKit
 #endif
 
+/// The four launch-time tabs, in display order. `beans` returns "" for
+/// `systemImage` because the Beans tab uses the Canvas-drawn `BeanIcon`
+/// instead of an SF Symbol (no coffee-bean glyph exists). The Hardware tab
+/// resolves its symbol once at first access, preferring the iOS 18+
+/// `espresso.machine` symbol and falling back to `cup.and.saucer.fill` when
+/// it isn't available.
 enum PSTab: String, CaseIterable, Identifiable {
     case log, history, beans, hardware
 
@@ -28,6 +34,9 @@ enum PSTab: String, CaseIterable, Identifiable {
     }()
 }
 
+/// Canvas-drawn three-bean cluster used as the Beans tab icon. Each bean is
+/// drawn inside its own `drawLayer` block so per-bean rotation and translation
+/// don't bleed into the others.
 struct BeanIcon: View {
     let color: Color
 

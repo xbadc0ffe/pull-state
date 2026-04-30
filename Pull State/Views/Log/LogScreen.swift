@@ -14,6 +14,7 @@ struct LogScreen: View {
 
     @Query(sort: \Equipment.createdAt, order: .reverse) private var allEquipment: [Equipment]
     @Query(sort: \Bean.createdAt, order: .reverse) private var beans: [Bean]
+    @Query(sort: \Shot.date, order: .reverse) private var allShots: [Shot]
 
     @State private var machineID: PersistentIdentifier?
     @State private var grinderID: PersistentIdentifier?
@@ -24,6 +25,7 @@ struct LogScreen: View {
     @State private var yieldG: Double = 38.0
     @State private var waterTemp: Double = 93
     @State private var pressure: Double = 9
+    @State private var grind: String = ""
     @State private var extraction: Extraction? = nil
     @State private var tags: Set<TastingTag> = []
     @State private var rating: Int = 0
@@ -39,8 +41,7 @@ struct LogScreen: View {
     @State private var startInstant: Date? = nil
     @State private var savedFlash: Bool = false
     @State private var showRecipeSheet: Bool = false
-    @State private var saveRecipePromptBean: Bean? = nil
-    @State private var saveRecipePromptValues: SaveRecipeValues? = nil
+    @State private var recipePrompt: RecipePrompt? = nil
 
     private var machines: [Equipment] { allEquipment.filter { $0.kind == .machine } }
     private var grinders: [Equipment] { allEquipment.filter { $0.kind == .grinder } }
@@ -60,6 +61,15 @@ struct LogScreen: View {
         return 0
     }
     private var ratio: Double { dose > 0 ? yieldG / dose : 0 }
+
+    private var preInGreenWindow: Bool {
+        guard let target = selectedBean?.recipe.preInfTime, target > 0 else { return false }
+        return preInfusion >= target - 1 && preInfusion <= target + 1
+    }
+    private var pullInGreenWindow: Bool {
+        guard let target = selectedBean?.recipe.pullTime, target > 0 else { return false }
+        return pullTime >= target - 3 && pullTime <= target + 3
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -98,9 +108,16 @@ struct LogScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            if machineID == nil { machineID = machines.first?.persistentModelID }
-            if grinderID == nil { grinderID = grinders.first?.persistentModelID }
-            if beanID == nil { beanID = beans.first?.persistentModelID }
+            let lastShot = allShots.first
+            if machineID == nil {
+                machineID = lastShot?.machine?.persistentModelID ?? machines.first?.persistentModelID
+            }
+            if grinderID == nil {
+                grinderID = lastShot?.grinder?.persistentModelID ?? grinders.first?.persistentModelID
+            }
+            if beanID == nil {
+                beanID = lastShot?.bean?.persistentModelID ?? beans.first?.persistentModelID
+            }
             preloadFromBean()
         }
         .onChange(of: beanID) { _, _ in
@@ -121,25 +138,43 @@ struct LogScreen: View {
             }
         }
         .alert(
-            "Save as recipe for \(saveRecipePromptBean?.name ?? "this bean")?",
+            recipePromptTitle,
             isPresented: Binding(
-                get: { saveRecipePromptBean != nil && saveRecipePromptValues != nil },
-                set: { if !$0 { saveRecipePromptBean = nil; saveRecipePromptValues = nil } }
+                get: { recipePrompt != nil },
+                set: { if !$0 { recipePrompt = nil } }
             )
         ) {
-            Button("Save Recipe") {
-                if let bean = saveRecipePromptBean, let v = saveRecipePromptValues {
-                    saveRecipeFromShot(v, into: bean)
-                }
-                saveRecipePromptBean = nil
-                saveRecipePromptValues = nil
+            Button(recipePromptConfirmLabel) {
+                applyRecipePrompt()
             }
             Button("Skip", role: .cancel) {
-                saveRecipePromptBean = nil
-                saveRecipePromptValues = nil
+                recipePrompt = nil
             }
         } message: {
-            Text("Update this bean's recipe with the values from this shot?")
+            Text(recipePromptMessage)
+        }
+    }
+
+    private var recipePromptTitle: String {
+        switch recipePrompt?.kind {
+        case .save: return "Save recipe?"
+        case .adjust: return "Adjust recipe?"
+        case .none: return ""
+        }
+    }
+    private var recipePromptMessage: String {
+        let beanName = recipePrompt?.bean.name ?? "this bean"
+        switch recipePrompt?.kind {
+        case .save: return "Save these settings as the recipe for \(beanName)?"
+        case .adjust: return "This pull matches or beats your best for \(beanName). Update the recipe with these settings?"
+        case .none: return ""
+        }
+    }
+    private var recipePromptConfirmLabel: String {
+        switch recipePrompt?.kind {
+        case .save: return "Save Recipe"
+        case .adjust: return "Update Recipe"
+        case .none: return "Save"
         }
     }
 
@@ -236,10 +271,10 @@ struct LogScreen: View {
                             TimerBtn(label: "START", primary: tState == .idle, disabled: tState != .idle, action: startTimer)
                                 .aspectRatio(1, contentMode: .fit)
                                 .frame(minWidth: 64, minHeight: 64)
-                            TimerBtn(label: "FIRST DRIP", primary: tState == .running && phase == .pre, disabled: !(tState == .running && phase == .pre), action: firstDrip)
+                            TimerBtn(label: "FIRST DRIP", primary: tState == .running && phase == .pre, disabled: !(tState == .running && phase == .pre), inGreenWindow: preInGreenWindow, action: firstDrip)
                                 .aspectRatio(1, contentMode: .fit)
                                 .frame(minWidth: 64, minHeight: 64)
-                            TimerBtn(label: "DONE", primary: tState == .running && phase == .pull, disabled: tState != .running, action: doneTimer)
+                            TimerBtn(label: "DONE", primary: tState == .running && phase == .pull, disabled: tState != .running, inGreenWindow: pullInGreenWindow, action: doneTimer)
                                 .aspectRatio(1, contentMode: .fit)
                                 .frame(minWidth: 64, minHeight: 64)
                         }
@@ -274,6 +309,7 @@ struct LogScreen: View {
             PSSectionLabel("Settings").padding(.leading, 4)
             PSCard {
                 VStack(spacing: 0) {
+                    grindField
                     SliderField(label: "Dose / Weight In", value: $dose, range: 7...25, step: 0.1, unit: "g", decimals: 1)
                     SliderField(label: "Yield / Weight Out", value: $yieldG, range: 7...75, step: 0.1, unit: "g", decimals: 1)
                     SliderField(
@@ -297,6 +333,28 @@ struct LogScreen: View {
                     .padding(.leading, 4)
             }
         }
+    }
+
+    @ViewBuilder
+    private var grindField: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Grind Setting")
+                .font(PSFont.body(13, weight: .medium))
+                .foregroundStyle(palette.inkSoft)
+            Spacer(minLength: 12)
+            TextField("e.g. 22", text: $grind)
+                .font(PSFont.mono(15, weight: .semibold))
+                .foregroundStyle(palette.ink)
+                .multilineTextAlignment(.trailing)
+                .textFieldStyle(.plain)
+        }
+        .padding(.vertical, 12)
+        .overlay(
+            Rectangle()
+                .fill(palette.line)
+                .frame(height: 0.5),
+            alignment: .bottom
+        )
     }
 
     private var tempRange: ClosedRange<Double> {
@@ -337,7 +395,7 @@ struct LogScreen: View {
     private var tastingSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             PSSectionLabel("Tasting notes").padding(.leading, 4)
-            FlowLayout(spacing: 6) {
+            FlowLayout(spacing: 6, alignment: .center) {
                 ForEach(TastingTag.allCases) { tag in
                     PSPill(
                         label: tag.label,
@@ -348,6 +406,7 @@ struct LogScreen: View {
                     )
                 }
             }
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -506,17 +565,88 @@ struct LogScreen: View {
         }
     }
 
-    private func beanHasMissingRecipeFields(_ bean: Bean) -> Bool {
+    private func evaluateRecipePrompt(bean: Bean, values: RecipePromptValues, shotRating: Int) {
         let r = bean.recipe
-        return r.dose == nil || r.yield == nil || r.temp == nil || r.pullPressure == nil
+        let recipeIsIncomplete = r.dose == nil || r.yield == nil || r.temp == nil || r.pullPressure == nil
+        if recipeIsIncomplete {
+            recipePrompt = RecipePrompt(kind: .save, bean: bean, values: values)
+            return
+        }
+
+        let bestRating = bean.shots.map(\.rating).max() ?? 0
+        let qualifiesByRating = shotRating >= bestRating
+
+        let valueDiffers = differsByPercent(values.dose, r.dose, percent: 0.10)
+            || differsByPercent(values.yield, r.yield, percent: 0.10)
+            || differs(values.temp, r.temp)
+            || differs(values.pressure, r.pullPressure)
+
+        let preDiffers: Bool
+        if let target = r.preInfTime, values.preInfusionUsed {
+            preDiffers = values.preInfusion < target - 1 || values.preInfusion > target + 1
+        } else {
+            preDiffers = false
+        }
+        let pullDiffers: Bool
+        if let target = r.pullTime, values.pullTimeUsed {
+            pullDiffers = values.pullTime < target - 3 || values.pullTime > target + 3
+        } else {
+            pullDiffers = false
+        }
+
+        if qualifiesByRating && (valueDiffers || preDiffers || pullDiffers) {
+            recipePrompt = RecipePrompt(kind: .adjust, bean: bean, values: values)
+        }
     }
 
-    private func saveRecipeFromShot(_ values: SaveRecipeValues, into bean: Bean) {
+    private func roundedTenth(_ value: Double) -> Double {
+        (value * 10).rounded() / 10
+    }
+
+    private func differs(_ a: Double, _ b: Double?) -> Bool {
+        guard let b else { return true }
+        return abs(a - b) > 0.01
+    }
+
+    private func differsByPercent(_ a: Double, _ b: Double?, percent: Double) -> Bool {
+        guard let b else { return true }
+        let tolerance = abs(b) * percent
+        return abs(a - b) > tolerance
+    }
+
+    private func applyRecipePrompt() {
+        guard let prompt = recipePrompt else { return }
+        switch prompt.kind {
+        case .save:
+            fillNilRecipeFields(prompt.values, into: prompt.bean)
+        case .adjust:
+            overwriteRecipeFields(prompt.values, into: prompt.bean)
+        }
+        recipePrompt = nil
+    }
+
+    private func fillNilRecipeFields(_ values: RecipePromptValues, into bean: Bean) {
         var r = bean.recipe
         if r.dose == nil { r.dose = values.dose }
         if r.yield == nil { r.yield = values.yield }
         if r.temp == nil { r.temp = values.temp }
         if r.pullPressure == nil { r.pullPressure = values.pressure }
+        if r.grind == nil, values.grindUsed { r.grind = values.grind }
+        if r.preInfTime == nil, values.preInfusionUsed { r.preInfTime = values.preInfusion }
+        if r.pullTime == nil, values.pullTimeUsed { r.pullTime = values.pullTime }
+        bean.recipe = r
+        try? context.save()
+    }
+
+    private func overwriteRecipeFields(_ values: RecipePromptValues, into bean: Bean) {
+        var r = bean.recipe
+        r.dose = values.dose
+        r.yield = values.yield
+        r.temp = values.temp
+        r.pullPressure = values.pressure
+        if values.grindUsed { r.grind = values.grind }
+        if values.preInfusionUsed { r.preInfTime = values.preInfusion }
+        if values.pullTimeUsed { r.pullTime = values.pullTime }
         bean.recipe = r
         try? context.save()
     }
@@ -528,6 +658,7 @@ struct LogScreen: View {
         if let y = r.yield { yieldG = y }
         if let t = r.temp { waterTemp = t }
         if let p = r.pullPressure { pressure = p }
+        if let g = r.grind { grind = g } else { grind = "" }
         lastLoadedBeanID = bean.persistentModelID
     }
 
@@ -576,32 +707,48 @@ struct LogScreen: View {
     private func save() {
         guard canSave else { return }
         let bean = selectedBean
-        let values = SaveRecipeValues(dose: dose, yield: yieldG, temp: waterTemp, pressure: pressure)
+        let preInfusionUsed = preEnd != nil
+        let pullTimeUsed = pullEnd != nil
+        let preInfusionSeconds = roundedTenth(preEnd ?? 0)
+        let pullSeconds = roundedTenth((pullEnd ?? 0) - (preEnd ?? 0))
+        let shotRating = rating
+        let trimmedGrind = grind.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let values = RecipePromptValues(
+            dose: dose,
+            yield: yieldG,
+            temp: waterTemp,
+            pressure: pressure,
+            grind: trimmedGrind,
+            preInfusion: preInfusionSeconds,
+            preInfusionUsed: preInfusionUsed,
+            pullTime: pullSeconds,
+            pullTimeUsed: pullTimeUsed
+        )
 
         let shot = Shot(
             date: shotDate,
             bean: bean,
             machine: selectedMachine,
             grinder: selectedGrinder,
-            grindSetting: bean?.recipe.grind ?? "",
+            grindSetting: trimmedGrind,
             dose: values.dose,
             yield: values.yield,
             waterTemp: values.temp,
             pressure: values.pressure,
-            preInfusion: preEnd ?? 0,
-            pull: (pullEnd ?? 0) - (preEnd ?? 0),
+            preInfusion: preInfusionSeconds,
+            pull: pullSeconds,
             extraction: extraction,
             tags: Array(tags),
-            rating: rating,
+            rating: shotRating,
             notes: notes,
             photoData: photoData
         )
         context.insert(shot)
         try? context.save()
 
-        if let bean, beanHasMissingRecipeFields(bean) {
-            saveRecipePromptBean = bean
-            saveRecipePromptValues = values
+        if let bean {
+            evaluateRecipePrompt(bean: bean, values: values, shotRating: shotRating)
         }
 
         resetTimer()
@@ -611,6 +758,7 @@ struct LogScreen: View {
         notes = ""
         photoData = nil
         shotDate = .now
+        grind = selectedBean?.recipe.grind ?? ""
 
         savedFlash = true
         Task {
@@ -623,11 +771,29 @@ struct LogScreen: View {
 enum TimerState { case idle, running, done }
 enum TimerPhase { case pre, pull }
 
-struct SaveRecipeValues: Equatable {
+struct RecipePromptValues: Equatable {
     let dose: Double
     let yield: Double
     let temp: Double
     let pressure: Double
+    let grind: String
+    let preInfusion: Double
+    let preInfusionUsed: Bool
+    let pullTime: Double
+    let pullTimeUsed: Bool
+
+    var grindUsed: Bool { !grind.isEmpty }
+}
+
+enum RecipePromptKind {
+    case save
+    case adjust
+}
+
+struct RecipePrompt {
+    let kind: RecipePromptKind
+    let bean: Bean
+    let values: RecipePromptValues
 }
 
 @MainActor

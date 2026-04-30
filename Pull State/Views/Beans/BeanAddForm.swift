@@ -10,6 +10,8 @@ struct BeanAddForm: View {
     @Environment(\.psPalette) private var palette
     @Environment(\.colorScheme) private var scheme
 
+    @Query private var existingBeans: [Bean]
+
     @State private var name = ""
     @State private var roaster = ""
     @State private var singleOrigin = true
@@ -21,8 +23,28 @@ struct BeanAddForm: View {
     @State private var notes = ""
     @State private var recipe: Recipe = Recipe()
     @State private var photoData: Data? = nil
+    @State private var preloadedFromBeanID: PersistentIdentifier? = nil
 
     private var nextBag: Int { settings.nextBagNumber }
+
+    private var matchingBean: Bean? {
+        let n = name.trimmingCharacters(in: .whitespaces).lowercased()
+        let r = roaster.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !n.isEmpty, !r.isEmpty else { return nil }
+        return existingBeans
+            .filter {
+                $0.name.trimmingCharacters(in: .whitespaces).lowercased() == n
+                    && $0.roaster.trimmingCharacters(in: .whitespaces).lowercased() == r
+            }
+            .max(by: { $0.createdAt < $1.createdAt })
+    }
+
+    private func preloadFromMatchingBeanIfNeeded() {
+        guard let match = matchingBean,
+              match.persistentModelID != preloadedFromBeanID else { return }
+        recipe = match.recipe
+        preloadedFromBeanID = match.persistentModelID
+    }
 
     var body: some View {
         ZStack {
@@ -83,43 +105,53 @@ struct BeanAddForm: View {
                         }
 
                         labelGroup("Process") {
-                            VStack(alignment: .leading, spacing: 8) {
-                                FlowLayout(spacing: 6, lineSpacing: 8) {
-                                    ForEach(BeanProcess.allCases) { p in
-                                        PSPill(
-                                            label: p.rawValue,
-                                            active: process == p,
-                                            horizontalPadding: 12,
-                                            verticalPadding: 10,
-                                            action: {
-                                                withAnimation(.easeInOut(duration: 0.2)) { process = p }
-                                            }
-                                        )
+                            PSCard {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    FlowLayout(spacing: 6, lineSpacing: 8) {
+                                        ForEach(BeanProcess.allCases) { p in
+                                            PSPill(
+                                                label: p.rawValue,
+                                                active: process == p,
+                                                horizontalPadding: 12,
+                                                verticalPadding: 10,
+                                                action: {
+                                                    withAnimation(.easeInOut(duration: 0.2)) { process = p }
+                                                }
+                                            )
+                                        }
                                     }
-                                }
-                                if process == .other {
-                                    PSCard {
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 12)
+
+                                    if process == .other {
+                                        Rectangle()
+                                            .fill(palette.line)
+                                            .frame(height: 0.5)
                                         PSField(label: "Specify process", last: true) {
                                             PSTextInput(text: $processOther, placeholder: "e.g. Anaerobic", alignment: .trailing)
                                         }
                                     }
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
                                 }
                             }
                         }
 
                         labelGroup("Roast Level") {
-                            HStack(spacing: 6) {
-                                ForEach(Roast.allCases) { r in
-                                    PSPill(
-                                        label: r.rawValue,
-                                        active: roast == r,
-                                        horizontalPadding: 8,
-                                        verticalPadding: 9,
-                                        action: { roast = r }
-                                    )
-                                    .frame(maxWidth: .infinity)
+                            PSCard {
+                                HStack(spacing: 6) {
+                                    ForEach(Roast.allCases) { r in
+                                        PSPill(
+                                            label: r.rawValue,
+                                            active: roast == r,
+                                            horizontalPadding: 8,
+                                            verticalPadding: 9,
+                                            action: { roast = r }
+                                        )
+                                        .frame(maxWidth: .infinity)
+                                    }
                                 }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
                             }
                         }
 
@@ -179,6 +211,8 @@ struct BeanAddForm: View {
             .psContentColumn()
         }
         .environment(\.psPalette, PSPalette.resolve(for: scheme))
+        .onChange(of: name) { _, _ in preloadFromMatchingBeanIfNeeded() }
+        .onChange(of: roaster) { _, _ in preloadFromMatchingBeanIfNeeded() }
     }
 
     @ViewBuilder

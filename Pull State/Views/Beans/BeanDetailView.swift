@@ -290,37 +290,47 @@ struct BeanDetailView: View {
         }
 
         section("Process") {
-            VStack(alignment: .leading, spacing: 8) {
-                FlowLayout(spacing: 6, lineSpacing: 8) {
-                    ForEach(BeanProcess.allCases) { p in
-                        PSPill(
-                            label: p.rawValue,
-                            active: dProcess == p,
-                            horizontalPadding: 12,
-                            verticalPadding: 10,
-                            action: {
-                                withAnimation(.easeInOut(duration: 0.2)) { dProcess = p }
-                            }
-                        )
+            PSCard {
+                VStack(alignment: .leading, spacing: 0) {
+                    FlowLayout(spacing: 6, lineSpacing: 8) {
+                        ForEach(BeanProcess.allCases) { p in
+                            PSPill(
+                                label: p.rawValue,
+                                active: dProcess == p,
+                                horizontalPadding: 12,
+                                verticalPadding: 10,
+                                action: {
+                                    withAnimation(.easeInOut(duration: 0.2)) { dProcess = p }
+                                }
+                            )
+                        }
                     }
-                }
-                if dProcess == .other {
-                    PSCard {
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+
+                    if dProcess == .other {
+                        Rectangle()
+                            .fill(palette.line)
+                            .frame(height: 0.5)
                         PSField(label: "Specify", last: true) {
                             PSTextInput(text: $dProcessOther, placeholder: "e.g. Anaerobic")
                         }
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
 
         section("Roast Level") {
-            HStack(spacing: 6) {
-                ForEach(Roast.allCases) { r in
-                    PSPill(label: r.rawValue, active: dRoast == r, horizontalPadding: 8, verticalPadding: 9, action: { dRoast = r })
-                        .frame(maxWidth: .infinity)
+            PSCard {
+                HStack(spacing: 6) {
+                    ForEach(Roast.allCases) { r in
+                        PSPill(label: r.rawValue, active: dRoast == r, horizontalPadding: 8, verticalPadding: 9, action: { dRoast = r })
+                            .frame(maxWidth: .infinity)
+                    }
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
             }
         }
 

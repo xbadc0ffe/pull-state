@@ -8,6 +8,8 @@ struct RecipeBlock: View {
         PSCard {
             VStack(spacing: 0) {
                 RecipeRow(label: "Grind", text: $recipe.grind, unit: "", editing: editing, placeholder: "e.g. 22")
+                RecipeNumberRow(label: "Dose", value: $recipe.dose, unit: "g", editing: editing)
+                RecipeNumberRow(label: "Yield", value: $recipe.yield, unit: "g", editing: editing)
                 RecipeNumberRow(label: "Water temp", value: $recipe.temp, unit: "°C", editing: editing)
                 RecipeNumberRow(label: "Pre-infuse time", value: $recipe.preInfTime, unit: "s", editing: editing)
                 RecipeNumberRow(label: "Pre-infuse pressure", value: $recipe.preInfPressure, unit: "bar", editing: editing)

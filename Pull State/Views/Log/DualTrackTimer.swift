@@ -107,6 +107,11 @@ struct TimerTrack: View {
     @State private var draft: String = ""
     @FocusState private var focused: Bool
 
+    private var inGreenWindow: Bool {
+        guard let t = target, t > 0 else { return false }
+        return value >= t - targetTolerance && value <= t + targetTolerance
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
@@ -177,10 +182,17 @@ struct TimerTrack: View {
                             .frame(width: proxy.size.width * (hi - lo), height: 8)
                             .offset(x: proxy.size.width * lo)
                     }
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(LinearGradient(colors: [palette.accent, palette.accentDeep], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: proxy.size.width * fraction, height: 8)
-                        .shadow(color: active ? palette.accent.opacity(0.4) : .clear, radius: 4)
+                    Group {
+                        if inGreenWindow {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(palette.good)
+                        } else {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(LinearGradient(colors: [palette.accent, palette.accentDeep], startPoint: .leading, endPoint: .trailing))
+                        }
+                    }
+                    .frame(width: proxy.size.width * fraction, height: 8)
+                    .shadow(color: active ? (inGreenWindow ? palette.good.opacity(0.45) : palette.accent.opacity(0.4)) : .clear, radius: 4)
                 }
                 .frame(height: 8)
             }
@@ -199,8 +211,28 @@ struct TimerBtn: View {
     let label: String
     let primary: Bool
     let disabled: Bool
+    var inGreenWindow: Bool = false
     let action: () -> Void
     @Environment(\.psPalette) private var palette
+
+    private var showsGreen: Bool { inGreenWindow && !disabled }
+
+    private var background: Color {
+        if showsGreen { return palette.good }
+        if primary { return palette.accent }
+        return disabled ? palette.surfaceAlt : palette.surface
+    }
+
+    private var foreground: Color {
+        if showsGreen { return .white }
+        if primary { return .white }
+        return disabled ? palette.inkMuted : palette.ink
+    }
+
+    private var stroke: Color {
+        if showsGreen || primary { return .clear }
+        return palette.line
+    }
 
     var body: some View {
         Button(action: action) {
@@ -208,21 +240,21 @@ struct TimerBtn: View {
                 .font(PSFont.mono(12, weight: .bold))
                 .tracking(1)
                 .multilineTextAlignment(.center)
-                .foregroundStyle(primary ? Color.white : (disabled ? palette.inkMuted : palette.ink))
+                .foregroundStyle(foreground)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(8)
                 .background(
-                    primary ? palette.accent : (disabled ? palette.surfaceAlt : palette.surface),
+                    background,
                     in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(primary ? Color.clear : palette.line, lineWidth: 0.5)
+                        .strokeBorder(stroke, lineWidth: 0.5)
                 )
                 .opacity(disabled ? 0.55 : 1)
         }
         .buttonStyle(.plain)
         .disabled(disabled)
-        .psShadow(strong: primary)
+        .psShadow(strong: primary || showsGreen)
     }
 }

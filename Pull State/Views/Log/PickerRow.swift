@@ -2,11 +2,13 @@ import SwiftUI
 import SwiftData
 
 /// One choice in a `PickerRow`'s expanded list, identified by SwiftData's
-/// `PersistentIdentifier`.
+/// `PersistentIdentifier`. `photoData` is shown as a leading thumbnail when
+/// the parent `PickerRow` opts into thumbnails.
 struct PickerOption: Identifiable, Hashable {
     let id: PersistentIdentifier
     let label: String
     let sub: String?
+    var photoData: Data? = nil
 }
 
 /// Inline-expanding picker row used by the Log screen and Shot edit's Source
@@ -20,6 +22,8 @@ struct PickerRow: View {
     let selectedID: PersistentIdentifier?
     let onPick: (PersistentIdentifier) -> Void
     var last: Bool = false
+    var photoData: Data? = nil
+    var showThumbnails: Bool = false
 
     @Environment(\.psPalette) private var palette
     @State private var open = false
@@ -29,7 +33,11 @@ struct PickerRow: View {
             Button {
                 withAnimation(.easeInOut(duration: 0.18)) { open.toggle() }
             } label: {
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
+                    if showThumbnails {
+                        PSPhotoThumb(data: photoData, label: label.uppercased(), radius: 8)
+                            .frame(width: 44, height: 44)
+                    }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(label.uppercased())
                             .font(PSFont.mono(9.5, weight: .medium))
@@ -65,20 +73,27 @@ struct PickerRow: View {
                             onPick(opt.id)
                             withAnimation(.easeInOut(duration: 0.18)) { open = false }
                         } label: {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(opt.label)
-                                    .font(PSFont.body(13, weight: .semibold))
-                                    .foregroundStyle(palette.ink)
-                                if let sub = opt.sub, !sub.isEmpty {
-                                    Text(sub)
-                                        .font(PSFont.body(11))
-                                        .foregroundStyle(palette.inkSoft)
+                            HStack(spacing: 10) {
+                                if showThumbnails {
+                                    PSPhotoThumb(data: opt.photoData, label: nil, radius: 6)
+                                        .frame(width: 32, height: 32)
                                 }
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(opt.label)
+                                        .font(PSFont.body(13, weight: .semibold))
+                                        .foregroundStyle(palette.ink)
+                                    if let sub = opt.sub, !sub.isEmpty {
+                                        Text(sub)
+                                            .font(PSFont.body(11))
+                                            .foregroundStyle(palette.inkSoft)
+                                    }
+                                }
+                                Spacer(minLength: 0)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.leading, 22)
+                            .padding(.leading, showThumbnails ? 14 : 22)
                             .padding(.trailing, 14)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, showThumbnails ? 8 : 10)
                             .overlay(
                                 Rectangle().fill(palette.line).frame(height: 0.5),
                                 alignment: .top

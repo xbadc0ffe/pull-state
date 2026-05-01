@@ -62,7 +62,7 @@ The single-column iPhone design is preserved on iPad by capping content to **560
 
 Section order, top to bottom:
 
-1. **Source** — three picker rows in one card: Machine, Grinder, Beans. Each row expands inline when tapped to show options. If any list is empty, a single placeholder card directs the user to set up their gear first; the Save button stays disabled. When a bean is selected, a **View Recipe** chip appears under the card → opens `RecipeSheet` (§3.7). On first appear, machine/grinder/bean are pre-selected from the **most recently logged shot** (`Shot.date` descending, take 1); when no shots exist yet, each picker falls back to the first item in its respective list. After a save the same equipment stays selected, so the next shot starts with the just-saved gear.
+1. **Source** — three picker rows in one card: Machine, Grinder, Beans. Each row expands inline when tapped to show options. Each row and each option renders a leading thumbnail (`PSPhotoThumb`, see §5.3) sourced from the entity's `photoData`, falling back to the striped `PSPlaceholder` when no photo has been attached. If any list is empty, a single placeholder card directs the user to set up their gear first; the Save button stays disabled. When a bean is selected, a **View Recipe** chip appears under the card → opens `RecipeSheet` (§3.7). On first appear, machine/grinder/bean are pre-selected from the **most recently logged shot** (`Shot.date` descending, take 1); when no shots exist yet, each picker falls back to the first item in its respective list. After a save the same equipment stays selected, so the next shot starts with the just-saved gear.
 2. **Timer** — `DualTrackTimer`. See §6.
 3. **Settings** — `Grind Setting` text field at the top (free-text, e.g. `"22"`), then sliders for `Dose / Weight In` (7–25 g, 0.1 step), `Yield / Weight Out` (7–75 g, 0.1 step), `Water Temp` (70–105 °C, 0.5 step — converted to Fahrenheit when the user has chosen °F, see §11.1), `Pressure` (4–12 bar, 0.1 step). When the bean changes, **only the recipe fields that are non-nil pre-populate their slider** — nil fields leave the slider where it was. The Grind Setting field also preloads from `recipe.grind` (and clears when the recipe value is nil). A small caption under the card reads "Loaded from {bean name} recipe."
 4. **Extraction** — three pills (Sour / Perfect / Bitter), tone-colored. Tappable to toggle on/off (single-select).
@@ -96,7 +96,7 @@ If neither condition is met, no prompt appears. Both prompts use `Bean.shots` (w
 **Sort sheet** — four options: Newest first, Oldest first, Highest rated, Lowest rated. Selection is highlighted with accent ring and a checkmark.
 
 **Shot detail (view mode):**
-- Photo (or placeholder)
+- Photo (or placeholder) — square at top, `.scaledToFit()` inside the slot
 - Bean name + bag # + stars + extraction pill
 - "Numbers" card: Pre-infusion, Pull time, Dose, Yield (with `1:X.YY` ratio suffix), Grind, Water, Pressure
 - "Hardware" card: Machine, Grinder
@@ -109,12 +109,12 @@ Same screen, but every field becomes editable: source pickers, extraction, tags 
 
 ### 3.3 Beans
 
-List of `BeanRowCard`s sorted by bag number descending. Each card shows: photo placeholder, name, bag #, roaster, roast badge, process tag, optional "SINGLE ORIGIN" label.
+List of `BeanRowCard`s sorted by bag number descending. Each card shows: bag photo (`PSPhotoThumb` over `bean.photoData`, falling back to the striped `PSPlaceholder` when nil), name, bag #, roaster, roast badge, process tag, optional "SINGLE ORIGIN" label.
 
 **Empty state:** circular leaf icon, "No beans yet", "Tap + to log your first bag."
 
 **Bean detail (view mode):**
-- Bag photo (or placeholder if `bean.photoData` is nil) — 4:3 at the top
+- Bag photo (or placeholder if `bean.photoData` is nil) — square at the top, photo `.scaledToFit()` inside the slot
 - Name + "BAG #X" + roaster line
 - Roast badge + process chip + optional Single Origin chip
 - **Rating trend chart** — `RatingChart`, a Path-drawn line chart. The visible viewport sizes for **10 slots** (most-recent shots fill from the right; if fewer than 10 shots exist, points sit on the left and the right slots stay empty). When more than 10 shots exist the chart is **horizontally scrollable** (`ScrollView(.horizontal)` with a fixed Y-axis column outside the scroll area) and starts scrolled to the trailing edge so the newest shots are visible. The line is a uniform **Catmull-Rom curve** (factor `1/6`) built from `Path.addCurve(to:control1:control2:)` and **passes exactly through every data point** — interpolation, not approximation. Dots, gridlines, MM-DD x labels, and the translucent fill below the curve carry over from the original sparkline.
@@ -130,12 +130,12 @@ Top-level Edit toggles all bean metadata (name, roaster, single-origin toggle, p
 
 ### 3.4 Hardware
 
-Two stacked sections: **Espresso Machines** and **Grinders**. Each section header has a small accent "+ Add" button. Cards (`HardwareCard`) show photo placeholder, name, brand, and a "N SHOTS" pill (live count via the inverse relationship).
+Two stacked sections: **Espresso Machines** and **Grinders**. Each section header has a small accent "+ Add" button. Cards (`HardwareCard`) show the equipment photo (`PSPhotoThumb` over `equipment.photoData`, falling back to the striped `PSPlaceholder` when nil), name, brand, and a "N SHOTS" pill (live count via the inverse relationship).
 
 The Hardware tab icon uses the SF Symbol `espresso.machine` when available (iOS 18+ SF Symbols 6) and falls back to `cup.and.saucer.fill`. The Beans tab icon is a Canvas-drawn three-bean cluster (drawn via repeated `GraphicsContext.drawLayer` blocks for per-bean translation/rotation).
 
 **Hardware detail (view mode):**
-- Photo (or placeholder) — 4:3 at top, sourced from `equipment.photoData`
+- Photo (or placeholder) — square at top, sourced from `equipment.photoData` and `.scaledToFit()` inside the slot
 - Name + brand
 - Stats card: Shots pulled (live count), Date added (`createdAt`)
 - Red **Delete machine/grinder** button. Confirmation note: *"Past shots logged on this machine/grinder will stay in your history but will no longer reference it."* Implemented via `@Relationship(deleteRule: .nullify, …)` — so shot data is preserved even after the hardware is deleted.
@@ -380,6 +380,8 @@ Defined in `Views/Components/` and used everywhere:
 - `PSPill` — capsule button with neutral/sour/perfect/bitter tone palette
 - `PSStars` — interactive or read-only star rating
 - `PSPlaceholder` — diagonal-stripe Canvas (mirrors the prototype's placeholder)
+- `PSPhotoThumb` — square thumbnail that decodes `Data?` into a `UIImage` and falls back to `PSPlaceholder` when the data is missing or undecodable; used by every photo display in the app (overview rows, Source pickers, detail-view hero photos, edit cards). The image is rendered with `.scaledToFit()` so any non-square photo sits as a centered rectangle inside the square slot with transparent space around it — no overflow into adjacent text
+- `PSPhotoCropSheet` — full-screen square-crop UI shown after every photo pick or capture (see §14)
 - `PSNavBar` — top bar (small or large variant), with leading and trailing slots
 - `PSTabBar` — custom rounded chrome bar; the Beans tab uses a Canvas-drawn three-bean cluster (`BeanIcon`); the Hardware tab tries `espresso.machine` and falls back to `cup.and.saucer.fill`
 - `PSIconBtn`, `PSTextBtn`, `PSToggle`, `PSRoastBadge`, `IconChip`, `StatCard`
@@ -396,7 +398,7 @@ Slider note: `SliderField` (in `Views/Log/`) does its own gesture handling — a
 
 - **No Form / List**. The whole app uses `ScrollView` + `VStack` + cards because the design language doesn't match the iOS Form aesthetic and because the warm page background needs to bleed into the empty space around the cards.
 - **No third-party deps.** First-party Apple frameworks only (per `CLAUDE.md`).
-- **Photos** go through `PSPhotoSourceMenu` everywhere, never `PhotosPicker` directly. The menu wraps `PhotosPicker` for the library path and a `UIImagePickerController` `UIViewControllerRepresentable` for the camera path. Required Info.plist keys (`NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`) are set as `INFOPLIST_KEY_*` build settings on both Debug and Release configurations.
+- **Photos** go through `PSPhotoSourceMenu` everywhere, never `PhotosPicker` directly. The menu wraps `PhotosPicker` for the library path and a `UIImagePickerController` `UIViewControllerRepresentable` for the camera path, then routes both through `PSPhotoCropSheet` so every saved JPEG is square. Required Info.plist keys (`NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`) are set as `INFOPLIST_KEY_*` build settings on both Debug and Release configurations.
 - **No force unwraps** in shipped code; optionals are unwrapped via `if let` / `guard`.
 - **Cross-platform shims.** `HideNavBar` and `PSDecimalKeyboard` ViewModifiers gate iOS-only modifiers behind `#if os(iOS)` so the project also builds for macOS. The `HideBackButton` modifier was removed — it was unused and dangerous (calling `.navigationBarBackButtonHidden(true)` silently kills the swipe-back gesture).
 
@@ -598,12 +600,29 @@ A single component, `PSPhotoSourceMenu`, is used everywhere the user can attach 
 - A `confirmationDialog` action sheet with **Take Photo** and **Choose from Photos** options
 - A `.photosPicker(isPresented:selection:matching:photoLibrary:)` for the library path
 - A `.fullScreenCover` (iOS-only) hosting a `UIViewControllerRepresentable` wrapper around `UIImagePickerController(sourceType: .camera)` for the camera path
+- A second `.fullScreenCover` keyed on a `PendingCropImage` state that hosts `PSPhotoCropSheet` — every successful pick or capture is funneled through it before the JPEG reaches the bound `Data?`
 
 Camera availability is gated by `UIImagePickerController.isSourceTypeAvailable(.camera)`. When the camera is unavailable (e.g. iOS Simulator, iPad without rear camera, macOS Catalyst), the action sheet is bypassed and the picker opens directly into Photos. On macOS the camera path is compiled out via `#if canImport(UIKit)`.
 
-The wrapped `CameraImagePicker` writes the captured image as JPEG (`compressionQuality: 0.85`) into the bound `Data?`. All photo storage on the SwiftData side uses `@Attribute(.externalStorage)` (Bean, Equipment, Shot).
+`CameraImagePicker` returns the raw `UIImage` to `PSPhotoSourceMenu` rather than writing JPEG directly, so the Photos and Camera paths converge on the same crop step. The camera coordinator dispatches the callback on the next runloop tick so SwiftUI can finish dismissing the camera cover before the crop cover is presented.
 
-`PhotoEditCard` composes `PSPhotoSourceMenu` into the standard thumbnail row used by the bean and hardware edit cards: thumbnail (or `PSPlaceholder`) on the left, label + hint in the middle, and an Add/Change capsule plus an ✕ remove circle on the right. The Log screen and Shot edit screen wire `PSPhotoSourceMenu` into their own inline cards with matching affordances.
+### Square crop step
+
+`PSPhotoCropSheet` (also in `Views/Components/`) is a full-screen SwiftUI sheet with:
+
+- A black backdrop, a centered translucent dim mask cut by a square outline drawn with an even-odd fill, and a 1.25 pt white border on the outline
+- Pan + pinch gestures (`SimultaneousGesture(DragGesture, MagnificationGesture)`) on the underlying `Image`
+- A geometry model where the **base** rendered size makes the image's shorter edge equal the on-screen crop side (so `scale = 1` is the cover scale); `minScale = 1`, `maxScale = 6`
+- Drag offsets clamped per axis to `±(effective − cropSide)/2`, so the crop outline is always fully populated
+- A `Cancel` / `Done` chrome row at the top; Done crops the source image down to the outline in pixel space (orientation-normalized first via `UIGraphicsImageRenderer`) and emits the JPEG (`compressionQuality: 0.85`)
+
+The result: every saved photo is square. Combined with `PSPhotoThumb`'s `.scaledToFit()` rendering, square-cropped photos fill their slots edge-to-edge while any legacy non-square data renders as a centered rectangle with transparent letterboxing — never overflowing the slot.
+
+All photo storage on the SwiftData side uses `@Attribute(.externalStorage)` (Bean, Equipment, Shot). Detail-view hero photos use a 1:1 aspect ratio container (was 4:3) so the cropped square is shown without re-cropping or letterboxing.
+
+`PhotoEditCard` composes `PSPhotoSourceMenu` into the standard thumbnail row used by the bean and hardware edit cards: thumbnail (`PSPhotoThumb`) on the left, label + hint in the middle, and an Add/Change capsule plus an ✕ remove circle on the right. The Log screen and Shot edit screen wire `PSPhotoSourceMenu` into their own inline cards with matching affordances.
+
+Read-only thumbnails (Bean / Hardware overview rows, Log Source pickers) go through `PSPhotoThumb` directly — same `Data?`-or-`PSPlaceholder` fallback as the edit-card thumbnail, minus the edit affordances.
 
 **Info.plist keys** (added as `INFOPLIST_KEY_*` build settings on Debug + Release):
 - `NSCameraUsageDescription` — "Pull State uses the camera to take photos of beans, hardware, and shots."
@@ -691,7 +710,7 @@ Pull State/
 └── Views/
     ├── RootView.swift             (onboarding ↔ main switch)
     ├── MainTabView.swift          (NavigationStack, NavRoute, sheets, env injection)
-    ├── Components/                (palette-aware reusable views; PSPhotoSourceMenu, PhotoEditCard)
+    ├── Components/                (palette-aware reusable views; PSPhotoSourceMenu, PhotoEditCard, PSPhotoThumb, PSPhotoCropSheet)
     ├── Log/                       (LogScreen, DualTrackTimer, SliderField, PickerRow)
     ├── History/                   (HistoryScreen, ShotCard, ShotDetailView, FilterSheet, SortSheet)
     ├── Beans/                     (BeansScreen, BeanDetailView, BeanAddForm, RecipeBlock, RecipeSheet, RatingChart)

@@ -113,20 +113,9 @@ struct HardwareDetailView: View {
     @ViewBuilder
     private func photoView(for item: Equipment) -> some View {
         let display: Data? = editing ? dPhotoData : item.photoData
-        Group {
-            #if canImport(UIKit)
-            if let data = display, let img = UIImage(data: data) {
-                Image(uiImage: img).resizable().scaledToFill()
-            } else {
-                PSPlaceholder(label: item.kind.singular.uppercased(), radius: 14)
-            }
-            #else
-            PSPlaceholder(label: item.kind.singular.uppercased(), radius: 14)
-            #endif
-        }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(4.0/3.0, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        PSPhotoThumb(data: display, label: item.kind.singular.uppercased(), radius: 14)
+            .frame(maxWidth: .infinity)
+            .aspectRatio(1, contentMode: .fit)
     }
 
     @ViewBuilder

@@ -75,7 +75,7 @@ struct BeanRowCard: View {
     var body: some View {
         PSCard(soft: true) {
             HStack(spacing: 12) {
-                PSPlaceholder(label: "BEAN", radius: 10)
+                PSPhotoThumb(data: bean.photoData, label: "BEAN", radius: 10)
                     .frame(width: 70, height: 70)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {

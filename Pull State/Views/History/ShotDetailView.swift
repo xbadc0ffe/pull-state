@@ -207,22 +207,9 @@ struct ShotDetailView: View {
     @ViewBuilder
     private func photoView(for shot: Shot) -> some View {
         let dataToShow: Data? = editing ? dPhotoData : shot.photoData
-        Group {
-            #if canImport(UIKit)
-            if let data = dataToShow, let img = UIImage(data: data) {
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                PSPlaceholder(label: "SHOT PHOTO", radius: 14)
-            }
-            #else
-            PSPlaceholder(label: "SHOT PHOTO", radius: 14)
-            #endif
-        }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(4.0/3.0, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        PSPhotoThumb(data: dataToShow, label: "SHOT PHOTO", radius: 14)
+            .frame(maxWidth: .infinity)
+            .aspectRatio(1, contentMode: .fit)
     }
 
     // MARK: - Edit-mode subviews
@@ -329,19 +316,8 @@ struct ShotDetailView: View {
         section("Photo") {
             PSCard {
                 HStack(spacing: 12) {
-                    Group {
-                        #if canImport(UIKit)
-                        if let dPhotoData, let img = UIImage(data: dPhotoData) {
-                            Image(uiImage: img).resizable().scaledToFill()
-                        } else {
-                            PSPlaceholder(label: "PHOTO", radius: 8)
-                        }
-                        #else
-                        PSPlaceholder(label: "PHOTO", radius: 8)
-                        #endif
-                    }
-                    .frame(width: 56, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    PSPhotoThumb(data: dPhotoData, label: "PHOTO", radius: 8)
+                        .frame(width: 56, height: 56)
 
                     Spacer()
                     if dPhotoData != nil {

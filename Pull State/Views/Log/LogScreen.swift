@@ -217,26 +217,32 @@ struct LogScreen: View {
                             label: "Machine",
                             value: selectedMachine?.name ?? "—",
                             sub: selectedMachine?.brand,
-                            options: machines.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.brand) },
+                            options: machines.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.brand, photoData: $0.photoData) },
                             selectedID: machineID,
-                            onPick: { machineID = $0 }
+                            onPick: { machineID = $0 },
+                            photoData: selectedMachine?.photoData,
+                            showThumbnails: true
                         )
                         PickerRow(
                             label: "Grinder",
                             value: selectedGrinder?.name ?? "—",
                             sub: selectedGrinder?.brand,
-                            options: grinders.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.brand) },
+                            options: grinders.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.brand, photoData: $0.photoData) },
                             selectedID: grinderID,
-                            onPick: { grinderID = $0 }
+                            onPick: { grinderID = $0 },
+                            photoData: selectedGrinder?.photoData,
+                            showThumbnails: true
                         )
                         PickerRow(
                             label: "Beans",
                             value: selectedBean?.name ?? "—",
                             sub: selectedBean.map { "\($0.roaster) · #\($0.bagNumber)" },
-                            options: beans.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: "\($0.roaster) · #\($0.bagNumber)") },
+                            options: beans.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: "\($0.roaster) · #\($0.bagNumber)", photoData: $0.photoData) },
                             selectedID: beanID,
                             onPick: { beanID = $0 },
-                            last: true
+                            last: true,
+                            photoData: selectedBean?.photoData,
+                            showThumbnails: true
                         )
                     }
                 }
@@ -446,21 +452,8 @@ struct LogScreen: View {
         PSCard {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    Group {
-                        #if canImport(UIKit)
-                        if let photoData, let img = UIImage(data: photoData) {
-                            Image(uiImage: img)
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            PSPlaceholder(label: "PHOTO", radius: 8)
-                        }
-                        #else
-                        PSPlaceholder(label: "PHOTO", radius: 8)
-                        #endif
-                    }
-                    .frame(width: 56, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    PSPhotoThumb(data: photoData, label: "PHOTO", radius: 8)
+                        .frame(width: 56, height: 56)
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Photo")

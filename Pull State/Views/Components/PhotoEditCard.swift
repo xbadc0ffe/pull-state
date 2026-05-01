@@ -12,19 +12,8 @@ struct PhotoEditCard: View {
     var body: some View {
         PSCard {
             HStack(spacing: 12) {
-                Group {
-                    #if canImport(UIKit)
-                    if let data, let img = UIImage(data: data) {
-                        Image(uiImage: img).resizable().scaledToFill()
-                    } else {
-                        PSPlaceholder(label: "PHOTO", radius: 10)
-                    }
-                    #else
-                    PSPlaceholder(label: "PHOTO", radius: 10)
-                    #endif
-                }
-                .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                PSPhotoThumb(data: data, label: "PHOTO", radius: 10)
+                    .frame(width: 56, height: 56)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(data == nil ? "Add a photo" : "Photo attached")

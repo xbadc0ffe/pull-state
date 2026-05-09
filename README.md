@@ -11,8 +11,8 @@ A local-only espresso shot logbook for iPhone and iPad — for home baristas who
 - Shot logging with a dual-track pre-infusion + pull timer
 - Per-bean recipes (grind, dose, yield, water temperature, pre-infusion and pull times and pressures), preloaded onto the Log screen and updated through smart "Save recipe?" / "Adjust recipe?" prompts
 - Equipment library for espresso machines and grinders, with autocomplete catalog and live shot counts
-- Bean library with bag numbering, photos, processing details, and a per-bean rating trend chart
-- Filterable and sortable shot history (extraction, tasting tags, rating, bean, machine, grinder)
+- Bean library with bag numbering, photos, processing details, the bag's claimed tasting notes, and a per-bean rating trend chart
+- Filterable and sortable shot history (extraction, tasting tags, rating, bean, machine, grinder, with/without paper filter)
 - Tip-jar in-app purchase — no features are gated behind it
 - Light / dark / system appearance and Celsius / Fahrenheit, selectable from Onboarding and About
 - iPhone and iPad layouts from a single SwiftUI codebase

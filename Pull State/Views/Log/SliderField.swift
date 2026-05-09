@@ -17,6 +17,7 @@ struct SliderField: View {
     @Environment(\.psPalette) private var palette
     @State private var editing = false
     @State private var draft: String = ""
+    @State private var dragActive: Bool? = nil
     @FocusState private var focused: Bool
 
     private var clampedValue: Double {
@@ -108,10 +109,36 @@ struct SliderField: View {
                 .frame(height: 22)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
-                .gesture(
+                // simultaneousGesture lets the parent ScrollView still receive
+                // vertical drags — `dragActive` decides whether *this* gesture
+                // commits a value change. Direction gating keeps vertical
+                // scroll smooth even when the touch started inside the knob's
+                // tolerance zone.
+                .simultaneousGesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { g in
-                            update(from: g.location.x, width: trackWidth)
+                            if dragActive == nil {
+                                let dx = abs(g.translation.width)
+                                let dy = abs(g.translation.height)
+                                // Defer the decision until the user has
+                                // actually moved — direction is ambiguous on
+                                // the very first touch sample.
+                                if dx < 4 && dy < 4 { return }
+
+                                let halfThumb: CGFloat = 9
+                                let forgiveness: CGFloat = 12
+                                let unclampedCenter = trackWidth * fraction
+                                let thumbCenter = max(halfThumb, min(trackWidth - halfThumb, unclampedCenter))
+                                let tolerance = halfThumb + forgiveness
+                                let inTolerance = abs(g.startLocation.x - thumbCenter) <= tolerance
+                                dragActive = inTolerance && dx > dy
+                            }
+                            if dragActive == true {
+                                update(from: g.location.x, width: trackWidth)
+                            }
+                        }
+                        .onEnded { _ in
+                            dragActive = nil
                         }
                 )
             }

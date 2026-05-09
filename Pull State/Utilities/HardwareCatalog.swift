@@ -48,6 +48,9 @@ enum HardwareCatalog {
         HardwareEntry(name: "Ponte Vecchio Lusso", brand: "Ponte Vecchio"),
         HardwareEntry(name: "Portaspresso Rossa", brand: "Portaspresso"),
         HardwareEntry(name: "Gaggiuino (DIY)", brand: "Gaggiuino"),
+        HardwareEntry(name: "La Marzocco Linea Micra", brand: "La Marzocco"),
+        HardwareEntry(name: "Lelit Bianca V3", brand: "Lelit"),
+        HardwareEntry(name: "Decent DE1Pro", brand: "Decent Espresso"),
     ]
 
     static let grinders: [HardwareEntry] = [

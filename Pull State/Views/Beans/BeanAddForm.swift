@@ -29,6 +29,7 @@ struct BeanAddForm: View {
     @State private var notes = ""
     @State private var recipe: Recipe = Recipe()
     @State private var photoData: Data? = nil
+    @State private var tastingTags: Set<TastingTag> = []
     @State private var preloadedFromBeanID: PersistentIdentifier? = nil
 
     private var nextBag: Int { settings.nextBagNumber }
@@ -67,9 +68,12 @@ struct BeanAddForm: View {
                         .foregroundStyle(palette.accent)
                         .buttonStyle(.plain)
                 }
+                .psContentColumn()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
+                        PSEditablePhotoHeader(data: $photoData, label: "BAG PHOTO")
+
                         Text("BAG #\(nextBag) · AUTO")
                             .font(PSFont.mono(11, weight: .bold))
                             .tracking(0.8)
@@ -96,6 +100,25 @@ struct BeanAddForm: View {
                             }
                         }
 
+                        labelGroup("Dates") {
+                            PSCard {
+                                VStack(spacing: 0) {
+                                    PSField(label: "Roast Date") {
+                                        DatePicker("", selection: $roastDate, displayedComponents: .date)
+                                            .datePickerStyle(.compact)
+                                            .labelsHidden()
+                                            .accentColor(palette.accent)
+                                    }
+                                    PSField(label: "Purchase Date", last: true) {
+                                        DatePicker("", selection: $purchaseDate, displayedComponents: .date)
+                                            .datePickerStyle(.compact)
+                                            .labelsHidden()
+                                            .accentColor(palette.accent)
+                                    }
+                                }
+                            }
+                        }
+
                         labelGroup("Single Origin") {
                             PSCard {
                                 HStack {
@@ -104,6 +127,25 @@ struct BeanAddForm: View {
                                         .foregroundStyle(palette.inkSoft)
                                     Spacer()
                                     PSToggle(isOn: $singleOrigin)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                            }
+                        }
+
+                        labelGroup("Roast Level") {
+                            PSCard {
+                                HStack(spacing: 6) {
+                                    ForEach(Roast.allCases) { r in
+                                        PSPill(
+                                            label: r.rawValue,
+                                            active: roast == r,
+                                            horizontalPadding: 8,
+                                            verticalPadding: 9,
+                                            action: { roast = r }
+                                        )
+                                        .frame(maxWidth: .infinity)
+                                    }
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 12)
@@ -142,46 +184,27 @@ struct BeanAddForm: View {
                             }
                         }
 
-                        labelGroup("Roast Level") {
+                        labelGroup("Tasting Notes") {
                             PSCard {
-                                HStack(spacing: 6) {
-                                    ForEach(Roast.allCases) { r in
+                                FlowLayout(spacing: 6, alignment: .leading) {
+                                    ForEach(TastingTag.allCases) { tag in
                                         PSPill(
-                                            label: r.rawValue,
-                                            active: roast == r,
-                                            horizontalPadding: 8,
-                                            verticalPadding: 9,
-                                            action: { roast = r }
+                                            label: tag.label,
+                                            active: tastingTags.contains(tag),
+                                            action: {
+                                                if tastingTags.contains(tag) {
+                                                    tastingTags.remove(tag)
+                                                } else {
+                                                    tastingTags.insert(tag)
+                                                }
+                                            }
                                         )
-                                        .frame(maxWidth: .infinity)
                                     }
                                 }
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 12)
                             }
-                        }
-
-                        labelGroup("Dates") {
-                            PSCard {
-                                VStack(spacing: 0) {
-                                    PSField(label: "Roast Date") {
-                                        DatePicker("", selection: $roastDate, displayedComponents: .date)
-                                            .datePickerStyle(.compact)
-                                            .labelsHidden()
-                                            .accentColor(palette.accent)
-                                    }
-                                    PSField(label: "Purchase Date", last: true) {
-                                        DatePicker("", selection: $purchaseDate, displayedComponents: .date)
-                                            .datePickerStyle(.compact)
-                                            .labelsHidden()
-                                            .accentColor(palette.accent)
-                                    }
-                                }
-                            }
-                        }
-
-                        labelGroup("Photo") {
-                            PhotoEditCard(data: $photoData, hint: "Helps you spot the bag in your shelf")
                         }
 
                         labelGroup("Notes") {
@@ -211,10 +234,10 @@ struct BeanAddForm: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
+                    .psContentColumn()
                 }
                 .scrollIndicators(.hidden)
             }
-            .psContentColumn()
         }
         .environment(\.psPalette, PSPalette.resolve(for: scheme))
         .onChange(of: name) { _, _ in preloadFromMatchingBeanIfNeeded() }
@@ -242,7 +265,8 @@ struct BeanAddForm: View {
             purchaseDate: purchaseDate,
             notes: notes,
             recipe: recipe,
-            photoData: photoData
+            photoData: photoData,
+            tastingTags: Array(tastingTags)
         )
         context.insert(bean)
         settings.nextBagNumber = nextBag + 1

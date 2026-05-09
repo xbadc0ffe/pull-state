@@ -33,6 +33,7 @@ struct ShotDetailView: View {
     @State private var dMachineID: PersistentIdentifier? = nil
     @State private var dGrinderID: PersistentIdentifier? = nil
     @State private var dPhotoData: Data? = nil
+    @State private var dPaperFilter: Bool = false
 
     init(shotID: PersistentIdentifier) {
         self.shotID = shotID
@@ -81,6 +82,7 @@ struct ShotDetailView: View {
                         }
                     }
                 }
+                .psContentColumn()
 
                 if let shot {
                     contentBody(for: shot)
@@ -90,7 +92,6 @@ struct ShotDetailView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .psContentColumn()
         }
         .environment(\.psPalette, PSPalette.resolve(for: scheme))
         .alert("Delete this shot?", isPresented: $showDeleteConfirm) {
@@ -138,7 +139,6 @@ struct ShotDetailView: View {
                     extractionPicker
                     tagsPicker
                     numbersEditableCard
-                    photoEditCard
                     dateEditCard(for: shot)
                     notesEditor
                     deleteButton
@@ -152,7 +152,12 @@ struct ShotDetailView: View {
                                 PSField(label: "Yield", suffix: String(format: "1:%.2f", shot.ratio)) { PSValueText(text: String(format: "%.1fg", shot.yield), fontSize: 13.5) }
                                 PSField(label: "Grind") { PSValueText(text: shot.grindSetting.isEmpty ? "—" : shot.grindSetting, fontSize: 13.5) }
                                 PSField(label: "Water") { PSValueText(text: formattedTemp(shot.waterTemp), fontSize: 13.5) }
-                                PSField(label: "Pressure", last: true) { PSValueText(text: "\(formattedPressure(shot.pressure)) bar", fontSize: 13.5) }
+                                if shot.usedPaperFilter {
+                                    PSField(label: "Pressure") { PSValueText(text: "\(formattedPressure(shot.pressure)) bar", fontSize: 13.5) }
+                                    PSField(label: "Paper Filter", last: true) { PSValueText(text: "Yes", fontSize: 13.5) }
+                                } else {
+                                    PSField(label: "Pressure", last: true) { PSValueText(text: "\(formattedPressure(shot.pressure)) bar", fontSize: 13.5) }
+                                }
                             }
                         }
                     }
@@ -200,16 +205,20 @@ struct ShotDetailView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 30)
+            .psContentColumn()
         }
         .scrollIndicators(.hidden)
     }
 
     @ViewBuilder
     private func photoView(for shot: Shot) -> some View {
-        let dataToShow: Data? = editing ? dPhotoData : shot.photoData
-        PSPhotoThumb(data: dataToShow, label: "SHOT PHOTO", radius: 14)
-            .frame(maxWidth: .infinity)
-            .aspectRatio(1, contentMode: .fit)
+        if editing {
+            PSEditablePhotoHeader(data: $dPhotoData, label: "SHOT PHOTO")
+        } else {
+            PSPhotoThumb(data: shot.photoData, label: "SHOT PHOTO", radius: 14)
+                .frame(maxWidth: .infinity)
+                .aspectRatio(1, contentMode: .fit)
+        }
     }
 
     // MARK: - Edit-mode subviews
@@ -303,51 +312,18 @@ struct ShotDetailView: View {
                     )
                     SliderField(label: "Pressure", value: $dPressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
                     SliderField(label: "Pre-infusion", value: $dPre, range: 0...20, step: 0.1, unit: "s", decimals: 1)
-                    SliderField(label: "Pull", value: $dPull, range: 0...60, step: 0.1, unit: "s", decimals: 1, last: true)
+                    SliderField(label: "Pull", value: $dPull, range: 0...60, step: 0.1, unit: "s", decimals: 1)
+                    HStack {
+                        Text("Paper Filter")
+                            .font(PSFont.body(13, weight: .medium))
+                            .foregroundStyle(palette.inkSoft)
+                        Spacer()
+                        PSToggle(isOn: $dPaperFilter)
+                    }
+                    .padding(.vertical, 12)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 4)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var photoEditCard: some View {
-        section("Photo") {
-            PSCard {
-                HStack(spacing: 12) {
-                    PSPhotoThumb(data: dPhotoData, label: "PHOTO", radius: 8)
-                        .frame(width: 56, height: 56)
-
-                    Spacer()
-                    if dPhotoData != nil {
-                        Button {
-                            dPhotoData = nil
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(palette.inkSoft)
-                                .frame(width: 28, height: 28)
-                                .background(palette.surface, in: Circle())
-                                .overlay(Circle().strokeBorder(palette.line, lineWidth: 0.5))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    PSPhotoSourceMenu(data: $dPhotoData) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "camera")
-                                .font(.system(size: 12))
-                            Text(dPhotoData == nil ? "Add" : "Change")
-                                .font(PSFont.body(12, weight: .semibold))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .foregroundStyle(dPhotoData == nil ? palette.ink : Color.white)
-                        .background(dPhotoData == nil ? palette.surface : palette.accent, in: Capsule())
-                        .overlay(Capsule().strokeBorder(palette.line, lineWidth: 0.5))
-                    }
-                }
-                .padding(14)
             }
         }
     }
@@ -463,6 +439,7 @@ struct ShotDetailView: View {
         dMachineID = shot.machine?.persistentModelID
         dGrinderID = shot.grinder?.persistentModelID
         dPhotoData = shot.photoData
+        dPaperFilter = shot.usedPaperFilter
     }
 
     private func commitEdit(into shot: Shot) {
@@ -481,6 +458,7 @@ struct ShotDetailView: View {
         shot.machine = machines.first(where: { $0.persistentModelID == dMachineID })
         shot.grinder = grinders.first(where: { $0.persistentModelID == dGrinderID })
         shot.photoData = dPhotoData
+        shot.usedPaperFilter = dPaperFilter
         try? context.save()
     }
 }

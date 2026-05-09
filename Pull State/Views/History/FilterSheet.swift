@@ -8,6 +8,7 @@ struct FilterSheet: View {
     @Binding var filterMachineID: PersistentIdentifier?
     @Binding var filterGrinderID: PersistentIdentifier?
     @Binding var filterTags: Set<TastingTag>
+    @Binding var filterPaper: Bool?
 
     let beans: [Bean]
     let machines: [Equipment]
@@ -30,6 +31,7 @@ struct FilterSheet: View {
             .padding(.horizontal, 18)
             .padding(.top, 14)
             .padding(.bottom, 12)
+            .psContentColumn()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -64,6 +66,29 @@ struct FilterSheet: View {
                                 }
                             )
                         }
+                    }
+                    .padding(.bottom, 14)
+
+                    PSSectionLabel("Paper filter").padding(.leading, 4).padding(.bottom, 8)
+                    HStack(spacing: 6) {
+                        PSPill(
+                            label: "With Filter",
+                            active: filterPaper == true,
+                            horizontalPadding: 8,
+                            verticalPadding: 9,
+                            fontSize: 12,
+                            action: { filterPaper = (filterPaper == true) ? nil : true }
+                        )
+                        .frame(maxWidth: .infinity)
+                        PSPill(
+                            label: "Without Filter",
+                            active: filterPaper == false,
+                            horizontalPadding: 8,
+                            verticalPadding: 9,
+                            fontSize: 12,
+                            action: { filterPaper = (filterPaper == false) ? nil : false }
+                        )
+                        .frame(maxWidth: .infinity)
                     }
                     .padding(.bottom, 14)
 
@@ -127,6 +152,7 @@ struct FilterSheet: View {
                             filterMachineID = nil
                             filterGrinderID = nil
                             filterTags = []
+                            filterPaper = nil
                         } label: {
                             Text("Clear all")
                                 .font(PSFont.body(13, weight: .semibold))
@@ -158,10 +184,10 @@ struct FilterSheet: View {
                     .padding(.bottom, 8)
                 }
                 .padding(.horizontal, 18)
+                .psContentColumn()
             }
             .scrollIndicators(.hidden)
         }
-        .psContentColumn()
     }
 
     private func tone(for ex: Extraction) -> PSPillTone {

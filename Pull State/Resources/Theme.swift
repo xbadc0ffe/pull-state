@@ -134,6 +134,13 @@ enum PSFmt {
         return f.string(from: d)
     }
 
+    static func longDate(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.dateStyle = .long
+        f.timeStyle = .none
+        return f.string(from: d)
+    }
+
     static func shortDateMono(_ d: Date) -> String {
         let f = DateFormatter()
         f.dateFormat = "MM-dd"

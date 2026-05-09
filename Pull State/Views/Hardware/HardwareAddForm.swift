@@ -17,6 +17,7 @@ struct HardwareAddForm: View {
 
     @State private var name = ""
     @State private var brand = ""
+    @State private var photoData: Data? = nil
 
     private var isMachine: Bool { kind == .machine }
 
@@ -35,9 +36,12 @@ struct HardwareAddForm: View {
                         .foregroundStyle(palette.accent)
                         .buttonStyle(.plain)
                 }
+                .psContentColumn()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
+                        PSEditablePhotoHeader(data: $photoData, label: kind.singular.uppercased())
+
                         labelGroup(kind == .machine ? "Espresso Machine" : "Grinder") {
                             VStack(alignment: .leading, spacing: 12) {
                                 OnbCombobox(
@@ -55,28 +59,6 @@ struct HardwareAddForm: View {
                             }
                         }
 
-                        labelGroup("Photo") {
-                            PSCard {
-                                HStack(spacing: 12) {
-                                    PSPlaceholder(label: "ADD", radius: 10)
-                                        .frame(width: 56, height: 56)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text("Add a photo")
-                                            .font(PSFont.body(13, weight: .semibold))
-                                            .foregroundStyle(palette.ink)
-                                        Text("Optional · helps when picking on Log")
-                                            .font(PSFont.body(11))
-                                            .foregroundStyle(palette.inkSoft)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "camera")
-                                        .font(.system(size: 22))
-                                        .foregroundStyle(palette.accent)
-                                }
-                                .padding(14)
-                            }
-                        }
-
                         Text(isMachine
                              ? "New machines start at 0 shots. Pulling shots on the Log tab will increment this automatically."
                              : "Grinder shot counts track how many shots have run through this burr set.")
@@ -88,10 +70,10 @@ struct HardwareAddForm: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
+                    .psContentColumn()
                 }
                 .scrollIndicators(.hidden)
             }
-            .psContentColumn()
         }
         .environment(\.psPalette, PSPalette.resolve(for: scheme))
     }
@@ -110,7 +92,8 @@ struct HardwareAddForm: View {
         let item = Equipment(
             name: finalName.isEmpty ? kind.defaultName : finalName,
             brand: finalBrand,
-            kind: kind
+            kind: kind,
+            photoData: photoData
         )
         context.insert(item)
         try? context.save()

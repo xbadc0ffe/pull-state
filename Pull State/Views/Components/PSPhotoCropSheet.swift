@@ -48,13 +48,13 @@ struct PSPhotoCropSheet: View {
                     .allowsHitTesting(false)
 
                 VStack {
-                    chrome(cropSide: cropSide, base: base)
+                    chrome(cropSide: cropSide, base: base, topInset: geo.safeAreaInsets.top)
                     Spacer()
                     Text("Pinch to zoom · Drag to position")
                         .font(PSFont.mono(10.5))
                         .tracking(0.6)
                         .foregroundStyle(Color.white.opacity(0.7))
-                        .padding(.bottom, 28)
+                        .padding(.bottom, max(geo.safeAreaInsets.bottom, 16) + 12)
                 }
             }
             .contentShape(Rectangle())
@@ -86,7 +86,7 @@ struct PSPhotoCropSheet: View {
     }
 
     @ViewBuilder
-    private func chrome(cropSide: CGFloat, base: CGSize) -> some View {
+    private func chrome(cropSide: CGFloat, base: CGSize, topInset: CGFloat) -> some View {
         HStack {
             Button("Cancel") { onCancel() }
                 .foregroundStyle(.white)
@@ -117,7 +117,13 @@ struct PSPhotoCropSheet: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
-        .padding(.top, 14)
+        // GeometryReader's safeAreaInsets is non-zero when the GR is laid out
+        // against the full screen (as happens inside .fullScreenCover) and
+        // zero when the GR sits inside the safe area. Either way, adding an
+        // explicit 16pt below that inset keeps the chrome clear of the status
+        // bar / dynamic island with comfortable breathing room on every
+        // supported iPhone form factor.
+        .padding(.top, topInset + 16)
     }
 
     @ViewBuilder

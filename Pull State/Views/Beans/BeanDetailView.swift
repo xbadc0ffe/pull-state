@@ -31,6 +31,7 @@ struct BeanDetailView: View {
     @State private var dPurchaseDate: Date = .now
     @State private var dNotes: String = ""
     @State private var dPhotoData: Data? = nil
+    @State private var dTastingTags: Set<TastingTag> = []
 
     init(beanID: PersistentIdentifier) {
         self.beanID = beanID
@@ -74,6 +75,7 @@ struct BeanDetailView: View {
                         }
                     }
                 }
+                .psContentColumn()
 
                 if let bean {
                     contentBody(for: bean)
@@ -83,7 +85,6 @@ struct BeanDetailView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .psContentColumn()
         }
         .environment(\.psPalette, PSPalette.resolve(for: scheme))
         .alert("Delete \(bean?.name ?? "this bean")?", isPresented: $showDeleteConfirm) {
@@ -120,16 +121,20 @@ struct BeanDetailView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 30)
+            .psContentColumn()
         }
         .scrollIndicators(.hidden)
     }
 
     @ViewBuilder
     private func bagPhoto(for bean: Bean) -> some View {
-        let display: Data? = editing ? dPhotoData : bean.photoData
-        PSPhotoThumb(data: display, label: "BAG PHOTO", radius: 14)
-            .frame(maxWidth: .infinity)
-            .aspectRatio(1, contentMode: .fit)
+        if editing {
+            PSEditablePhotoHeader(data: $dPhotoData, label: "BAG PHOTO")
+        } else {
+            PSPhotoThumb(data: bean.photoData, label: "BAG PHOTO", radius: 14)
+                .frame(maxWidth: .infinity)
+                .aspectRatio(1, contentMode: .fit)
+        }
     }
 
     @ViewBuilder
@@ -145,14 +150,22 @@ struct BeanDetailView: View {
             .font(PSFont.body(13))
             .foregroundStyle(palette.inkSoft)
             .padding(.top, 4)
+        Text("\(PSFmt.longDate(bean.roastDate)) · \(PSFmt.longDate(bean.purchaseDate))")
+            .font(PSFont.body(11))
+            .foregroundStyle(palette.inkMuted)
+            .padding(.top, 2)
 
-        HStack(spacing: 6) {
+        FlowLayout(spacing: 6, lineSpacing: 6, alignment: .leading) {
             PSRoastBadge(level: bean.roast)
             chip(bean.processDisplay.uppercased(), accent: false)
             if bean.singleOrigin {
                 chip("SINGLE ORIGIN", accent: true)
             }
+            ForEach(bean.tastingTags) { tag in
+                chip(tag.label.uppercased(), accent: false)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 10)
 
         section("Rating trend", topPad: 20) {
@@ -166,15 +179,6 @@ struct BeanDetailView: View {
                 } else {
                     RatingChart(points: bean.ratingTrend)
                         .padding(14)
-                }
-            }
-        }
-
-        section("Dates") {
-            PSCard {
-                VStack(spacing: 0) {
-                    PSField(label: "Roast date") { PSValueText(text: PSFmt.shortDate(bean.roastDate), fontSize: 13) }
-                    PSField(label: "Purchase date", last: true) { PSValueText(text: PSFmt.shortDate(bean.purchaseDate), fontSize: 13) }
                 }
             }
         }
@@ -333,6 +337,29 @@ struct BeanDetailView: View {
             }
         }
 
+        section("Tasting Notes") {
+            PSCard {
+                FlowLayout(spacing: 6, alignment: .leading) {
+                    ForEach(TastingTag.allCases) { tag in
+                        PSPill(
+                            label: tag.label,
+                            active: dTastingTags.contains(tag),
+                            action: {
+                                if dTastingTags.contains(tag) {
+                                    dTastingTags.remove(tag)
+                                } else {
+                                    dTastingTags.insert(tag)
+                                }
+                            }
+                        )
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+        }
+
         section("Dates") {
             PSCard {
                 VStack(spacing: 0) {
@@ -348,10 +375,6 @@ struct BeanDetailView: View {
                     }
                 }
             }
-        }
-
-        section("Photo") {
-            PhotoEditCard(data: $dPhotoData, hint: "Snap the bag so it's easy to spot.")
         }
 
         section("Notes") {
@@ -431,6 +454,7 @@ struct BeanDetailView: View {
         dPurchaseDate = bean.purchaseDate
         dNotes = bean.notes
         dPhotoData = bean.photoData
+        dTastingTags = Set(bean.tastingTags)
     }
 
     private func commitEdit(into bean: Bean) {
@@ -444,6 +468,7 @@ struct BeanDetailView: View {
         bean.purchaseDate = dPurchaseDate
         bean.notes = dNotes
         bean.photoData = dPhotoData
+        bean.tastingTags = Array(dTastingTags)
         try? context.save()
     }
 }

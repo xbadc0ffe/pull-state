@@ -43,7 +43,15 @@ Sheet presentations propagate `\.psPalette` and `\.psTempUnit` into the sheet's 
 
 ### iPad layout
 
-The single-column iPhone design is preserved on iPad by capping content to **560pt** centered, via `PSContentColumn`. The page background fills the whole screen, but cards, navigation bars, and the tab bar live inside the constrained column. This avoids stretched-thin rows while keeping the warm-wash gradient edge-to-edge.
+The single-column iPhone design is preserved on iPad by capping content to **560pt** centered, via `PSContentColumn`. The page background fills the whole screen, cards / navigation bars / the tab bar all live inside the constrained column.
+
+`psContentColumn()` is applied **per surface** — never to the outer `VStack` wrapping a `ScrollView`. The pattern on every scrollable screen is:
+
+1. `PSNavBar(...).psContentColumn()` — capped header
+2. `ScrollView { content.padding(...).psContentColumn() }` — full-width scroll view, content capped inside
+3. `PSTabBar(...).psContentColumn()` (on `MainTabView` only) — capped tab chrome
+
+This keeps the warm-wash gradient edge-to-edge **and** lets vertical drags on the blank sides of the column still scroll the page (the `ScrollView` itself runs full-width). All four tab screens (Log, History, Beans, Hardware), every detail view (Bean / Hardware / Shot detail), the add forms (Bean / Hardware), the Filter sheet, and the Sort sheet follow this structure.
 
 ### Sheets and modals
 
@@ -64,13 +72,13 @@ Section order, top to bottom:
 
 1. **Source** — three picker rows in one card: Machine, Grinder, Beans. Each row expands inline when tapped to show options. Each row and each option renders a leading thumbnail (`PSPhotoThumb`, see §5.3) sourced from the entity's `photoData`, falling back to the striped `PSPlaceholder` when no photo has been attached. If any list is empty, a single placeholder card directs the user to set up their gear first; the Save button stays disabled. When a bean is selected, a **View Recipe** chip appears under the card → opens `RecipeSheet` (§3.7). On first appear, machine/grinder/bean are pre-selected from the **most recently logged shot** (`Shot.date` descending, take 1); when no shots exist yet, each picker falls back to the first item in its respective list. After a save the same equipment stays selected, so the next shot starts with the just-saved gear.
 2. **Timer** — `DualTrackTimer`. See §6.
-3. **Settings** — `Grind Setting` text field at the top (free-text, e.g. `"22"`), then sliders for `Dose / Weight In` (7–25 g, 0.1 step), `Yield / Weight Out` (7–75 g, 0.1 step), `Water Temp` (70–105 °C, 0.5 step — converted to Fahrenheit when the user has chosen °F, see §11.1), `Pressure` (4–12 bar, 0.1 step). When the bean changes, **only the recipe fields that are non-nil pre-populate their slider** — nil fields leave the slider where it was. The Grind Setting field also preloads from `recipe.grind` (and clears when the recipe value is nil). A small caption under the card reads "Loaded from {bean name} recipe."
+3. **Settings** — `Grind Setting` text field at the top (free-text, e.g. `"22"`), then sliders for `Dose / Weight In` (7–25 g, 0.1 step), `Yield / Weight Out` (7–75 g, 0.1 step), `Water Temp` (70–105 °C, 0.5 step — converted to Fahrenheit when the user has chosen °F, see §11.1), `Pressure` (4–12 bar, 0.1 step), and a **Paper Filter** `PSToggle` row at the **bottom** of the card (below Pressure). When the bean changes, **only the recipe fields that are non-nil pre-populate their slider** — nil fields leave the slider where it was. The Grind Setting field also preloads from `recipe.grind` (and clears when the recipe value is nil). The Paper Filter toggle does **not** load from the bean — it is a per-shot decision, not a recipe parameter. A small caption under the card reads "Loaded from {bean name} recipe."
 4. **Extraction** — three pills (Sour / Perfect / Bitter), tone-colored. Tappable to toggle on/off (single-select).
 5. **Tasting notes** — a flow-laid grid of all eight `TastingTag` values, **horizontally centered** within the column (`FlowLayout(spacing: 6, alignment: .center)`). Multi-select. (Tag set: Chocolate, Caramel, Fruity, Citrus, Floral, Nutty, Smoky, Earthy.)
 6. **Rating** — five stars (`PSStars`), bound to an Int 0–5.
 7. **Photo + Date card** — `PSPhotoSourceMenu` (Take Photo / Choose from Photos action sheet, see §14), with thumbnail + Change/Add/× actions. Date defaults to `.now` and is editable via a compact `DatePicker`.
 8. **Notes** — multi-line `TextEditor` over the card background, with placeholder.
-9. **Save shot button** — disabled unless bean + machine + grinder are all selected. Briefly flashes "SAVED ✓" after success and resets the form (timer, rating, extraction, tags, notes, photo, date back to `.now`, grind cleared then re-populated from the still-selected bean's recipe). Equipment selection is preserved across saves; the slider values for dose/yield/temp/pressure are also preserved.
+9. **Save shot button** — disabled unless bean + machine + grinder are all selected. Briefly flashes "SAVED ✓" after success and resets the form (timer, rating, extraction, tags, notes, photo, date back to `.now`, grind cleared then re-populated from the still-selected bean's recipe). Equipment selection is preserved across saves; the slider values for dose/yield/temp/pressure and the Paper Filter toggle are also preserved.
 
 **After saving:** at most one of two prompts may appear (mutually exclusive):
 
@@ -91,21 +99,25 @@ If neither condition is met, no prompt appears. Both prompts use `Bean.shots` (w
 - Filter chip (with badge showing active filter count) + Sort chip + filtered/total ratio
 - Vertical list of `ShotCard` rows, each tappable to push `ShotDetailView`
 
-**Filter sheet** — extraction tone pills, **tasting-notes pills** (multi-select; AND-match — only shots that contain *all* selected tags pass), min-rating pills (Any / 2+ / 3+ / 4+ / 5+), and three select rows (any beans / any machine / any grinder, populated from the actual library). The filter chip's badge counter on History sums extraction + min-rating + each select + **each active tag**. Clear-all button on the left, Apply on the right.
+`ShotCard`'s leading thumbnail uses the fallback chain `shot.photoData → shot.bean?.photoData → PSPlaceholder`, implemented via the optional `fallback: Data?` parameter on `PSPhotoThumb` (§5.3). A shot without its own photo therefore shows the bag's photo at a glance instead of the striped placeholder. This fallback is scoped to the History `ShotCard` only — the Shot detail hero photo, Log source picker thumbnails, and Bean / Hardware overview rows continue to use the single-data path.
+
+**Filter sheet** — extraction tone pills, **tasting-notes pills** (multi-select; AND-match — only shots that contain *all* selected tags pass), a **Paper Filter** row with three states backed by `Bool?` (nil = Any, no filtering; `true` = "With Filter", filters to `usedPaperFilter == true`; `false` = "Without Filter", filters to `usedPaperFilter == false`). Tapping a selected pill deselects it back to Any, so the user can never land in a contradictory "both selected" state. Below it: min-rating pills (Any / 2+ / 3+ / 4+ / 5+), and three select rows (any beans / any machine / any grinder, populated from the actual library). The filter chip's badge counter on History sums extraction + min-rating + each select + **each active tag** + **+1 whenever the paper-filter dimension is non-nil** (either With Filter or Without Filter). Clear-all button on the left, Apply on the right.
 
 **Sort sheet** — four options: Newest first, Oldest first, Highest rated, Lowest rated. Selection is highlighted with accent ring and a checkmark.
+
+`ShotCard` shows a one-line preview of shot stats below the rating + extraction row, ordered **`time - ratio - dose → yield`** with plain ASCII hyphens between groups (e.g. `27.0s - 1:2.10 - 18.0g → 36.0g`). The arrow between dose and yield is the Unicode rightwards arrow `→` (U+2192).
 
 **Shot detail (view mode):**
 - Photo (or placeholder) — square at top, `.scaledToFit()` inside the slot
 - Bean name + bag # + stars + extraction pill
-- "Numbers" card: Pre-infusion, Pull time, Dose, Yield (with `1:X.YY` ratio suffix), Grind, Water, Pressure
+- "Numbers" card: Pre-infusion, Pull time, Dose, Yield (with `1:X.YY` ratio suffix), Grind, Water, Pressure, plus a `Paper Filter: Yes` row that appears **only when `usedPaperFilter == true`** (hidden otherwise to keep the card tight in the common case)
 - "Hardware" card: Machine, Grinder
 - "Tasting notes" — pills (or "No tags")
 - Notes (if non-empty)
 - Detail timestamp footer
 
 **Shot detail (edit mode):**
-Same screen, but every field becomes editable: source pickers, extraction, tags (rendered in `FlowLayout` matching Log spacing), six sliders (dose, yield, temp, pressure, pre-infusion, pull) with the same ranges as the Log screen and the same C/F display conversion, photo (inline card over `PSPhotoSourceMenu` — same shape as the Log screen's photo row, not `PhotoEditCard`), date picker, notes editor. Cancel + Save in the nav bar trailing slot. A red **Delete shot** button at the bottom triggers a confirmation alert.
+Same screen, but every field becomes editable: source pickers, extraction, tags (rendered in `FlowLayout` matching Log spacing), six sliders inside the Settings card (dose, yield, temp, pressure, pre-infusion, pull) with the same ranges as the Log screen and the same C/F display conversion, then a **Paper Filter** `PSToggle` row at the **bottom** of the Settings card (mirroring Log's placement below Pressure). The square photo at the top of the screen is itself the editable surface — `PSEditablePhotoHeader` (§14) carries the pencil-overlay button that opens `PSPhotoSourceMenu`, so there is no separate Photo section in edit mode. Below the Settings card: date picker, notes editor. Cancel + Save in the nav bar trailing slot. A red **Delete shot** button at the bottom triggers a confirmation alert.
 
 ### 3.3 Beans
 
@@ -115,18 +127,31 @@ List of `BeanRowCard`s sorted by bag number descending. Each card shows: bag pho
 
 **Bean detail (view mode):**
 - Bag photo (or placeholder if `bean.photoData` is nil) — square at the top, photo `.scaledToFit()` inside the slot
-- Name + "BAG #X" + roaster line
-- Roast badge + process chip + optional Single Origin chip
+- Name + "BAG #X"
+- Roaster line, with the **roast date and purchase date** rendered just below it as a single small caption (`PSFmt.longDate` — `Month Day, Year` via `DateFormatter.dateStyle = .long`, joined by `·`). The Dates card has been removed from view mode in v1.2; both dates appear once, in this header position.
+- A `FlowLayout` containing the roast badge, the process chip, the optional **Single Origin** accent chip, and **inline tasting-tag chips** — each tasting tag from `bean.tastingTags` renders as a small uppercased text chip styled to match the process chip (same mono font, padding, surface background). The whole row wraps when needed. The tags are the bag's claimed flavor profile (what the label says to expect), independent from `Shot.tagsRaw` — they are still never surfaced on the Log screen, on shot detail, or in History. There is no longer a standalone "Tasting Notes" section on view mode.
 - **Rating trend chart** — `RatingChart`, a Path-drawn line chart. The visible viewport sizes for **10 slots** (most-recent shots fill from the right; if fewer than 10 shots exist, points sit on the left and the right slots stay empty). When more than 10 shots exist the chart is **horizontally scrollable** (`ScrollView(.horizontal)` with a fixed Y-axis column outside the scroll area) and starts scrolled to the trailing edge so the newest shots are visible. The line is a uniform **Catmull-Rom curve** (factor `1/6`) built from `Path.addCurve(to:control1:control2:)` and **passes exactly through every data point** — interpolation, not approximation. Dots, gridlines, MM-DD x labels, and the translucent fill below the curve carry over from the original sparkline.
-- Dates card: Roast date, Purchase date
 - Notes card (if any)
 - **Recipe card** — inline-editable. Tap "Edit" to flip the recipe block into edit mode (Cancel / Save). The recipe object lives as JSON `Data` on the bean; see §4. Each row shows "—" when its underlying field is nil.
 - Footer: shot count + average rating
 
 **Bean detail (edit mode):**
-Top-level Edit toggles all bean metadata (name, roaster, single-origin toggle, process pills inside a `PSCard` with an inline "Specify" text row revealed below the pills when **Other** is chosen — pills + reveal share the same card so the row participates in normal flow and never overlaps the Roast Level section below; roast pills inside their own matching `PSCard`; dates, **Photo** card via `PhotoEditCard`, notes). The recipe has its own separate Edit flow (mid-page) so users can dial in a recipe without entering the full edit flow. Bottom: red **Delete bean** button. Confirmation: *"Delete {bean name}? All associated pulls will be deleted too. N shots will be removed."* Implemented via SwiftData `@Relationship(deleteRule: .cascade, inverse: \Shot.bean)`.
+The bag photo at the top is itself editable in this mode — it renders as `PSEditablePhotoHeader` (§14) with the pencil-overlay button opening `PSPhotoSourceMenu`, so there is no standalone "Photo" section in edit mode. Top-level Edit toggles all other bean metadata: name, roaster, single-origin toggle, process pills inside a `PSCard` with an inline "Specify" text row revealed below the pills when **Other** is chosen (pills + reveal share the same card so the row participates in normal flow and never overlaps the Roast Level section below); roast pills inside their own matching `PSCard`; a **Tasting Notes card** with a multi-select `FlowLayout` of all eight `TastingTag` pills bound to the edit draft; dates; notes. The recipe has its own separate Edit flow (mid-page) so users can dial in a recipe without entering the full edit flow. Bottom: red **Delete bean** button. Confirmation: *"Delete {bean name}? All associated pulls will be deleted too. N shots will be removed."* Implemented via SwiftData `@Relationship(deleteRule: .cascade, inverse: \Shot.bean)`.
 
-**Add bean form** — full-screen sheet over the page background. Bag number is auto-assigned (`AppSettings.nextBagNumber`) and shown in an accent banner. Sections: Identity (Bean Name + Roaster), Single Origin toggle, **Process card** (pills inside a `PSCard`; selecting **Other** reveals an inline "Specify process" text row inside the same card with a 0.5pt divider above), **Roast Level card** (pills inside a matching `PSCard` for visual consistency with Process), Dates (real `DatePicker`s), **Photo card** (`PhotoEditCard` over `PSPhotoSourceMenu`), Notes, Recipe block (editable). **Recipe preload from existing bag** — as the user types Name and Roaster, the form looks for an existing bean whose name AND roaster match (case-insensitive, trimmed); when a match is found, the most recent matching bean's `recipe` is copied into the draft. The match is tracked by `persistentModelID`, so re-typing the same combination never overwrites in-progress recipe edits, but switching to a different match does refresh. Save creates the bean (with optional `photoData`) and increments `nextBagNumber`. Cancel discards.
+**Add bean form** — full-screen sheet over the page background. The first thing in the form is the **photo header** (`PSEditablePhotoHeader`, label `BAG PHOTO`); tapping the pencil overlay opens `PSPhotoSourceMenu` and routes through the same crop sheet as everywhere else. Below it is the auto-assigned bag-number banner (`AppSettings.nextBagNumber` rendered in an accent capsule).
+
+Section order, top to bottom — **Identity → Dates → Single Origin → Roast Level → Process → Tasting Notes → Notes → Recipe**:
+
+1. **Identity** — Bean Name + Roaster
+2. **Dates** — real `DatePicker`s for Roast Date / Purchase Date
+3. **Single Origin** toggle
+4. **Roast Level** — pills inside a `PSCard`
+5. **Process** — pills inside a `PSCard`; selecting **Other** reveals an inline "Specify process" text row inside the same card with a 0.5 pt divider above
+6. **Tasting Notes** — multi-select `FlowLayout` of all eight `TastingTag` pills (independent from `Shot.tagsRaw` and never surfaced on the Log/Shot/History flows)
+7. **Notes** — multi-line `TextEditor` over the card background
+8. **Recipe** block (editable)
+
+**Recipe preload from existing bag** — as the user types Name and Roaster, the form looks for an existing bean whose name AND roaster match (case-insensitive, trimmed); when a match is found, the most recent matching bean's `recipe` is copied into the draft. The match is tracked by `persistentModelID`, so re-typing the same combination never overwrites in-progress recipe edits, but switching to a different match does refresh. Save creates the bean (with optional `photoData` and `tastingTags`) and increments `nextBagNumber`. Cancel discards.
 
 ### 3.4 Hardware
 
@@ -140,9 +165,9 @@ The Hardware tab icon uses the SF Symbol `espresso.machine` when available (iOS 
 - Stats card: Shots pulled (live count), Date added (`createdAt`)
 - Red **Delete machine/grinder** button. Confirmation note: *"Past shots logged on this machine/grinder will stay in your history but will no longer reference it."* Implemented via `@Relationship(deleteRule: .nullify, …)` — so shot data is preserved even after the hardware is deleted.
 
-**Hardware detail (edit mode):** Edit button in the nav bar trailing slot. Identity card with editable Name + Brand `PSTextInput`s, plus a **Photo** card (`PhotoEditCard`). Cancel + Save in the trailing slot.
+**Hardware detail (edit mode):** Edit button in the nav bar trailing slot. The square photo at the top of the screen becomes editable in place via `PSEditablePhotoHeader` (§14) — pencil overlay opens `PSPhotoSourceMenu`, no standalone Photo section. Below it: an Identity card with editable Name + Brand `PSTextInput`s. Cancel + Save in the trailing slot.
 
-**Add hardware form** — full-screen sheet, kind-aware: same form for "Add Machine" and "Add Grinder". Name uses `OnbCombobox` driven by `HardwareCatalog` (substring case-insensitive match against name; selecting a suggestion auto-fills Brand via `HardwareCatalog.brand(forName:kind:)`, and Brand stays user-editable). Brand uses `OnbField`. The catalog covers manual/lever espresso machines and the common hand-grinder + electric-grinder ranges (Flair, Cafelat, Wacaco, La Pavoni, 1Zpresso, Commandante, Timemore, Kinu, Knock, Weber Workshops, Option-O, Fellow, Niche, DF, Baratza, Mazzer, Eureka, Fiorenzato, …). The user can type a fully custom name not in the catalog. The Add form shows a non-interactive "Add a photo" card as a hint — photos are attached afterwards from the Hardware detail edit flow.
+**Add hardware form** — full-screen sheet, kind-aware: same form for "Add Machine" and "Add Grinder". The form opens with a `PSEditablePhotoHeader` at the top — the pencil overlay opens `PSPhotoSourceMenu` and the chosen image goes through the same crop sheet as everywhere else, then is persisted as `Equipment.photoData` on save. (In v1.1 this slot was a non-interactive "Add a photo" placeholder; in v1.2 the form actually attaches the photo at creation time.) Below the photo: Name uses `OnbCombobox` driven by `HardwareCatalog` (substring case-insensitive match against name; selecting a suggestion auto-fills Brand via `HardwareCatalog.brand(forName:kind:)`, and Brand stays user-editable). Brand uses `OnbField`. The catalog covers manual/lever espresso machines and the common hand-grinder + electric-grinder ranges (Flair, Cafelat, Wacaco, La Pavoni, 1Zpresso, Commandante, Timemore, Kinu, Knock, Weber Workshops, Option-O, Fellow, Niche, DF, Baratza, Mazzer, Eureka, Fiorenzato, …). The user can type a fully custom name not in the catalog.
 
 ### 3.5 About sheet
 
@@ -151,7 +176,7 @@ Presented from any tab via the `…` (ellipsis) icon in the top-right of the nav
 - × close button (top-right)
 - App logo — `Image("badc0ffe-logo")` from the asset catalog, capped at 160 pt wide
 - Title "Pull State"
-- Version line "v 1.0.0 · APR 26 2026"
+- Version line "v 1.2 · MAY 08 2026"
 - Card with rows: **Built by** (badc0ffe), **Contact** (info@badc0ffe.net), **GitHub** (tappable `Link` to `https://github.com/xbadc0ffe/pull-state`, accent-colored + underlined), **Temperature** (Celsius / Fahrenheit switch — see §11.1), **Appearance** (System / Light / Dark switch)
 - **Tip jar** — see §10
 - Footer copy block on `surfaceAlt` background
@@ -204,6 +229,7 @@ final class Bean {
     var notes: String
     var createdAt: Date
     @Attribute(.externalStorage) var photoData: Data?
+    var tastingTagsRaw: [String] = []                       // [TastingTag.rawValue], inline default for migration
     private var recipeData: Data?                           // JSON-encoded Recipe
 
     @Relationship(deleteRule: .cascade, inverse: \Shot.bean)
@@ -215,6 +241,7 @@ Computed/exposed:
 - `process: BeanProcess` and `roast: Roast` — get/set wrappers over the raw strings
 - `processDisplay: String` — uses `processOther` when process is `.other`
 - `recipe: Recipe` — JSON-decoded; **falls back to an empty `Recipe()` (all-nil)** when `recipeData` is nil or fails to decode. Setter encodes.
+- `tastingTags: [TastingTag]` — get/set wrapper over `tastingTagsRaw`. Read uses `compactMap(TastingTag.init(rawValue:))` so unrecognized raw values are silently dropped, matching the existing `Shot.tags` pattern. Stores the bag's claimed flavor profile (label expectations) — independent from `Shot.tagsRaw`, never surfaced outside the Beans tab.
 - `ratingTrend: [BeanRatingPoint]` — shots sorted by date, mapped to (date, rating) for the sparkline
 - `averageRating: Double?` — nil when no shots
 
@@ -239,6 +266,7 @@ final class Shot {
     var tagsRaw: [String]            // [TastingTag.rawValue]
     var rating: Int                  // 0...5
     var notes: String
+    var usedPaperFilter: Bool = false // inline default for SwiftData migration
     @Attribute(.externalStorage) var photoData: Data?
 
     var bean: Bean?
@@ -253,6 +281,8 @@ Computed:
 `@Attribute(.externalStorage)` keeps photo blobs out of the main SQLite file, so the DB stays small even with many photos.
 
 The references to Bean/Machine/Grinder are optional — a hardware item can be deleted without orphaning the shot's data.
+
+`usedPaperFilter` records whether the user pulled the shot through a paper filter (e.g. AeroPress disk in a portafilter, paper basket disk). It is a per-shot decision, not a recipe parameter — `Recipe` carries no equivalent field. The Log screen and the Shot-edit screen both place the toggle at the **bottom** of the Settings card (below Pressure); Log preserves the toggle's value across saves (matching how dose/yield/temp/pressure are preserved). The History filter sheet exposes it as a three-state filter (Any / With Filter / Without Filter, backed by an optional `Bool?` binding). The Shot detail's Numbers card surfaces a `Paper Filter: Yes` row only when the value is `true`.
 
 ### 4.3 Equipment
 
@@ -389,10 +419,17 @@ Defined in `Views/Components/` and used everywhere:
 - `PSPageBackground` — radial-gradient warm wash, full screen
 - `PSContentColumn` — caps content to 560pt centered (iPad layout)
 - `PSPhotoSourceMenu` — universal photo entry point (§14): action sheet over Take Photo / Choose from Photos, falls back to Photos-only when the camera is unavailable
-- `PhotoEditCard` — thumbnail row with Add/Change + ✕ remove, used by Bean add/edit and Hardware edit. The Log and Shot edit screens use a custom inline card with the same affordances
+- `PSEditablePhotoHeader` — the square photo header used at the top of every add/edit form (Bean add, Bean detail edit, Hardware add, Hardware detail edit, Shot detail edit). Composes `PSPhotoThumb` (or `PSPlaceholder` when no photo is set) with a bottom-right pencil button wired to `PSPhotoSourceMenu`, plus an ✕ remove button that appears alongside the pencil whenever a photo is set. Hit area is ≥ 44 pt; the pencil is visually subtle (palette surface circle + line stroke) but findable. Replaces the v1.1 `PhotoEditCard` row across the app
 - `ModeSwitch` (Appearance) and `TempUnitSwitch` (Celsius/Fahrenheit) — capsule segmented controls used by both About and Onboarding
 
-Slider note: `SliderField` (in `Views/Log/`) does its own gesture handling — a `DragGesture(minimumDistance: 0)` over the visual track maps tap/drag x-position to a stepped, clamped value. There is no hidden `Slider` underneath; the visible thumb is the only thing that exists.
+Slider note: `SliderField` (in `Views/Log/`) does its own gesture handling — a `DragGesture(minimumDistance: 0)` over the visual track maps drag x-position to a stepped, clamped value. There is no hidden `Slider` underneath; the visible thumb is the only thing that exists.
+
+Two safety properties hold simultaneously:
+
+- **Tap-to-jump is disabled.** On the first `.onChanged` past the deferral threshold the component checks the touch's start x against the rendered thumb center (`max(9, min(trackWidth - 9, trackWidth * fraction))` — clamped to the visible thumb position even at the slider extremes). If the start lands outside `thumbHalfWidth + 12pt` (i.e. ±21 pt of the thumb center), the gesture is latched inactive and ignored for the remainder of that drag — taps far from the thumb do nothing.
+- **Vertical scroll passes through.** The drag is registered as a `simultaneousGesture`, so the parent `ScrollView` receives the same touch events. The active/inactive latch waits for at least 4 pt of movement before deciding, then engages **only when `|dx| > |dy|`** (predominantly horizontal). Vertical drags that start on a slider track therefore scroll the page normally — the Log and Shot-edit Settings cards no longer trap finger drags on the slider rows.
+
+The latch resets on `.onEnded`, so each fresh touch is re-evaluated.
 
 ### 5.4 Decisions worth flagging
 
@@ -492,7 +529,7 @@ Presented from the `…` icon in any tab's nav bar. Large detent over `palette.s
 Layout (top to bottom):
 
 1. App logo — `Image("badc0ffe-logo")` from the asset catalog (max 160 pt wide, `.scaledToFit()`)
-2. Title "Pull State" + version line "v 1.0.0 · APR 26 2026"
+2. Title "Pull State" + version line "v 1.2 · MAY 08 2026"
 3. Identity card — Built by, Contact, GitHub (tappable `Link`), **Temperature** (Celsius/Fahrenheit `TempUnitSwitch`), **Appearance** (System/Light/Dark `ModeSwitch`)
 4. Tip jar (see below)
 5. Tagline footer on `surfaceAlt`
@@ -587,7 +624,7 @@ enum HardwareCatalog {
 }
 ```
 
-Lists are intentionally focused on the audience: manual/lever espresso machines (Flair, Cafelat, Wacaco, La Pavoni, Elektra, Olympia Express, Ponte Vecchio, Portaspresso, Gaggiuino) and the popular hand- and electric-grinder ranges (1Zpresso, Commandante, Timemore, Kinu, Orphan Espresso, Knock, Weber Workshops, Option-O, Fellow, Niche, DF Grinders, Baratza, Mazzer, Eureka, Fiorenzato).
+Lists are intentionally focused on the audience: manual/lever espresso machines (Flair, Cafelat, Wacaco, La Pavoni, Elektra, Olympia Express, Ponte Vecchio, Portaspresso, Gaggiuino) plus a small set of common prosumer dual-boilers (La Marzocco Linea Micra, Lelit Bianca V3, Decent DE1Pro), and the popular hand- and electric-grinder ranges (1Zpresso, Commandante, Timemore, Kinu, Orphan Espresso, Knock, Weber Workshops, Option-O, Fellow, Niche, DF Grinders, Baratza, Mazzer, Eureka, Fiorenzato).
 
 The catalog is *suggestions only* — the combobox accepts any custom name and the brand field stays editable after auto-fill.
 
@@ -620,9 +657,18 @@ The result: every saved photo is square. Combined with `PSPhotoThumb`'s `.scaled
 
 All photo storage on the SwiftData side uses `@Attribute(.externalStorage)` (Bean, Equipment, Shot). Detail-view hero photos use a 1:1 aspect ratio container (was 4:3) so the cropped square is shown without re-cropping or letterboxing.
 
-`PhotoEditCard` composes `PSPhotoSourceMenu` into the standard thumbnail row used by the bean and hardware edit cards: thumbnail (`PSPhotoThumb`) on the left, label + hint in the middle, and an Add/Change capsule plus an ✕ remove circle on the right. The Log screen and Shot edit screen wire `PSPhotoSourceMenu` into their own inline cards with matching affordances.
+### Photo header overlay (universal entry point)
 
-Read-only thumbnails (Bean / Hardware overview rows, Log Source pickers) go through `PSPhotoThumb` directly — same `Data?`-or-`PSPlaceholder` fallback as the edit-card thumbnail, minus the edit affordances.
+Every add/edit form composes `PSPhotoSourceMenu` into a single shared component, **`PSEditablePhotoHeader`** (in `Views/Components/`). It renders the square photo (or `PSPlaceholder` stripe when none is set) at the top of the form and overlays two compact circular buttons in the bottom-right corner:
+
+- **Pencil** — the `PSPhotoSourceMenu` label. ≥ 44 pt hit target; visible icon is 14 pt over a palette-surface circle with a 0.5 pt line stroke and a soft shadow. Always visible, regardless of whether a photo is set
+- **✕ remove** — appears beside the pencil only when `data != nil`. Tapping clears the binding back to nil; the placeholder stripe returns
+
+This unifies what was previously three different patterns (the Log + Shot-edit inline cards, plus the standalone `PhotoEditCard` row used by Bean / Hardware add and edit). The standalone `PhotoEditCard` component was retired in v1.2 — `PSEditablePhotoHeader` is the single source of photo-entry chrome on every form.
+
+The Log screen retains its own custom **Photo + Date** card (a small thumbnail row beside a `DatePicker`) because the Log shot photo is optional metadata rather than the visual header of an entity — keeping it inline keeps the screen tight.
+
+Read-only thumbnails (Bean / Hardware overview rows, Log Source pickers, the read-only mode of any detail view) go through `PSPhotoThumb` directly — same `Data?`-or-`PSPlaceholder` fallback as the editable header, minus the overlay buttons.
 
 **Info.plist keys** (added as `INFOPLIST_KEY_*` build settings on Debug + Release):
 - `NSCameraUsageDescription` — "Pull State uses the camera to take photos of beans, hardware, and shots."
@@ -678,7 +724,7 @@ Per `CLAUDE.md`, **not** in v1 — do not implement until explicitly scoped:
 - iCloud sync (currently local only)
 - Home Screen widget
 - Share-shot-as-image card
-- Rating trend charts beyond the per-bean sparkline (a v1.1 candidate)
+- Rating trend charts beyond the per-bean sparkline
 
 These are deliberate omissions, not unbuilt features. The data model and architecture leave room for each: `Shot` already stores everything needed for export; `Bean.ratingTrend` is the seed for richer charts; the on-device-only model is what makes iCloud sync a v2 add rather than a refactor.
 
@@ -710,7 +756,7 @@ Pull State/
 └── Views/
     ├── RootView.swift             (onboarding ↔ main switch)
     ├── MainTabView.swift          (NavigationStack, NavRoute, sheets, env injection)
-    ├── Components/                (palette-aware reusable views; PSPhotoSourceMenu, PhotoEditCard, PSPhotoThumb, PSPhotoCropSheet)
+    ├── Components/                (palette-aware reusable views; PSPhotoSourceMenu, PSEditablePhotoHeader, PSPhotoThumb, PSPhotoCropSheet)
     ├── Log/                       (LogScreen, DualTrackTimer, SliderField, PickerRow)
     ├── History/                   (HistoryScreen, ShotCard, ShotDetailView, FilterSheet, SortSheet)
     ├── Beans/                     (BeansScreen, BeanDetailView, BeanAddForm, RecipeBlock, RecipeSheet, RatingChart)

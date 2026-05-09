@@ -19,6 +19,7 @@ final class Shot {
     var tagsRaw: [String]
     var rating: Int
     var notes: String
+    var usedPaperFilter: Bool = false
     @Attribute(.externalStorage) var photoData: Data?
 
     var bean: Bean?
@@ -41,6 +42,7 @@ final class Shot {
         tags: [TastingTag] = [],
         rating: Int = 0,
         notes: String = "",
+        usedPaperFilter: Bool = false,
         photoData: Data? = nil
     ) {
         self.date = date
@@ -58,6 +60,7 @@ final class Shot {
         self.tagsRaw = tags.map(\.rawValue)
         self.rating = rating
         self.notes = notes
+        self.usedPaperFilter = usedPaperFilter
         self.photoData = photoData
     }
 

@@ -19,6 +19,7 @@ final class Bean {
     var notes: String
     var createdAt: Date
     @Attribute(.externalStorage) var photoData: Data?
+    var tastingTagsRaw: [String] = []
 
     private var recipeData: Data?
 
@@ -38,6 +39,7 @@ final class Bean {
         notes: String = "",
         recipe: Recipe = Recipe(),
         photoData: Data? = nil,
+        tastingTags: [TastingTag] = [],
         createdAt: Date = .now
     ) {
         self.name = name
@@ -51,6 +53,7 @@ final class Bean {
         self.purchaseDate = purchaseDate
         self.notes = notes
         self.photoData = photoData
+        self.tastingTagsRaw = tastingTags.map(\.rawValue)
         self.createdAt = createdAt
         self.recipe = recipe
     }
@@ -67,6 +70,11 @@ final class Bean {
 
     var processDisplay: String {
         process == .other ? (processOther.isEmpty ? "Other" : processOther) : process.rawValue
+    }
+
+    var tastingTags: [TastingTag] {
+        get { tastingTagsRaw.compactMap(TastingTag.init(rawValue:)) }
+        set { tastingTagsRaw = newValue.map(\.rawValue) }
     }
 
     var recipe: Recipe {

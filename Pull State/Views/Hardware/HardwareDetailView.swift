@@ -66,6 +66,7 @@ struct HardwareDetailView: View {
                         }
                     }
                 }
+                .psContentColumn()
 
                 if let item {
                     contentBody(for: item)
@@ -75,7 +76,6 @@ struct HardwareDetailView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .psContentColumn()
         }
         .environment(\.psPalette, PSPalette.resolve(for: scheme))
         .alert("Delete \(item?.name ?? "this item")?", isPresented: $showDeleteConfirm) {
@@ -106,16 +106,20 @@ struct HardwareDetailView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 30)
+            .psContentColumn()
         }
         .scrollIndicators(.hidden)
     }
 
     @ViewBuilder
     private func photoView(for item: Equipment) -> some View {
-        let display: Data? = editing ? dPhotoData : item.photoData
-        PSPhotoThumb(data: display, label: item.kind.singular.uppercased(), radius: 14)
-            .frame(maxWidth: .infinity)
-            .aspectRatio(1, contentMode: .fit)
+        if editing {
+            PSEditablePhotoHeader(data: $dPhotoData, label: item.kind.singular.uppercased())
+        } else {
+            PSPhotoThumb(data: item.photoData, label: item.kind.singular.uppercased(), radius: 14)
+                .frame(maxWidth: .infinity)
+                .aspectRatio(1, contentMode: .fit)
+        }
     }
 
     @ViewBuilder
@@ -173,10 +177,6 @@ struct HardwareDetailView: View {
                     }
                 }
             }
-        }
-
-        section("Photo") {
-            PhotoEditCard(data: $dPhotoData, hint: "Photo helps you spot it on the bench.")
         }
     }
 

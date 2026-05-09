@@ -2,7 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- TEMPORARILY REMOVED for App Store submission under bundle ID com.badc0ffe.pullstate.
+	     The Data Protection capability is not yet enabled on the App ID in the Apple
+	     Developer portal, which causes provisioning-profile generation to fail at archive
+	     time. Restore the entitlement below in a follow-up release once the capability is
+	     enabled (see CLAUDE.md "Architecture rules" — entitlement must be either
+	     NSFileProtectionComplete or NSFileProtectionCompleteUnlessOpen).
+
 	<key>com.apple.developer.default-data-protection</key>
 	<string>NSFileProtectionCompleteUnlessOpen</string>
+	-->
 </dict>
 </plist>

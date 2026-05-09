@@ -35,6 +35,7 @@ struct LogScreen: View {
     @State private var waterTemp: Double = 93
     @State private var pressure: Double = 9
     @State private var grind: String = ""
+    @State private var usedPaperFilter: Bool = false
     @State private var extraction: Extraction? = nil
     @State private var tags: Set<TastingTag> = []
     @State private var rating: Int = 0
@@ -87,6 +88,7 @@ struct LogScreen: View {
             } trailing: {
                 PSIconBtn(systemName: "ellipsis", label: "More", action: onShowAbout)
             }
+            .psContentColumn()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -108,6 +110,7 @@ struct LogScreen: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 14)
+                .psContentColumn()
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
@@ -339,7 +342,8 @@ struct LogScreen: View {
                         unit: tempUnit.label,
                         decimals: tempUnit == .celsius ? 1 : 0
                     )
-                    SliderField(label: "Pressure", value: $pressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1, last: true)
+                    SliderField(label: "Pressure", value: $pressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
+                    paperFilterRow
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 4)
@@ -374,6 +378,18 @@ struct LogScreen: View {
                 .frame(height: 0.5),
             alignment: .bottom
         )
+    }
+
+    @ViewBuilder
+    private var paperFilterRow: some View {
+        HStack {
+            Text("Paper Filter")
+                .font(PSFont.body(13, weight: .medium))
+                .foregroundStyle(palette.inkSoft)
+            Spacer()
+            PSToggle(isOn: $usedPaperFilter)
+        }
+        .padding(.vertical, 12)
     }
 
     private var tempRange: ClosedRange<Double> {
@@ -748,6 +764,7 @@ struct LogScreen: View {
             tags: Array(tags),
             rating: shotRating,
             notes: notes,
+            usedPaperFilter: usedPaperFilter,
             photoData: photoData
         )
         context.insert(shot)

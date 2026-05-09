@@ -23,6 +23,7 @@ struct BeansScreen: View {
                     PSIconBtn(systemName: "ellipsis", action: onShowAbout)
                 }
             }
+            .psContentColumn()
 
             if beans.isEmpty {
                 emptyState
@@ -38,6 +39,7 @@ struct BeansScreen: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 30)
+                    .psContentColumn()
                 }
                 .scrollIndicators(.hidden)
             }

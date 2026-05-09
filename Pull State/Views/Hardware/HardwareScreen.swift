@@ -21,6 +21,7 @@ struct HardwareScreen: View {
             } trailing: {
                 PSIconBtn(systemName: "ellipsis", action: onShowAbout)
             }
+            .psContentColumn()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -29,6 +30,7 @@ struct HardwareScreen: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 30)
+                .psContentColumn()
             }
             .scrollIndicators(.hidden)
         }

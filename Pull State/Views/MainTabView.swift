@@ -44,8 +44,8 @@ struct MainTabView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     PSTabBar(selected: $selected)
+                        .psContentColumn()
                 }
-                .psContentColumn()
             }
             .navigationDestination(for: NavRoute.self) { route in
                 switch route {

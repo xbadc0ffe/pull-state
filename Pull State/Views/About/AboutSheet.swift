@@ -39,7 +39,7 @@ struct AboutSheet: View {
                         .frame(maxWidth: 160)
                         .padding(.vertical, 6)
                     PSDisplay("Pull State", size: 26)
-                    Text("v 1.0.0 · APR 26 2026")
+                    Text("v 1.2 · MAY 08 2026")
                         .font(PSFont.mono(11))
                         .tracking(1)
                         .foregroundStyle(palette.inkMuted)

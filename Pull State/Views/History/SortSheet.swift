@@ -18,6 +18,7 @@ struct SortSheet: View {
             .padding(.horizontal, 18)
             .padding(.top, 14)
             .padding(.bottom, 12)
+            .psContentColumn()
 
             VStack(spacing: 8) {
                 ForEach(SortOrder.allCases) { order in
@@ -49,9 +50,9 @@ struct SortSheet: View {
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 16)
+            .psContentColumn()
 
             Spacer()
         }
-        .psContentColumn()
     }
 }

@@ -39,7 +39,7 @@ struct AboutSheet: View {
                         .frame(maxWidth: 160)
                         .padding(.vertical, 6)
                     PSDisplay("Pull State", size: 26)
-                    Text("v 1.2 · MAY 08 2026")
+                    Text("v 1.3 · MAY 25 2026")
                         .font(PSFont.mono(11))
                         .tracking(1)
                         .foregroundStyle(palette.inkMuted)
@@ -77,10 +77,16 @@ struct AboutSheet: View {
                                 set: { settings.temperatureUnit = $0 }
                             ))
                         }
-                        PSField(label: "Appearance", last: true) {
+                        PSField(label: "Appearance") {
                             ModeSwitch(appearance: Binding(
                                 get: { settings.appearance },
                                 set: { settings.appearance = $0 }
+                            ))
+                        }
+                        PSField(label: "Recipe Suggestions", last: true) {
+                            PSToggle(isOn: Binding(
+                                get: { settings.autoRecipePromptEnabled },
+                                set: { settings.autoRecipePromptEnabled = $0 }
                             ))
                         }
                     }

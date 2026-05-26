@@ -13,6 +13,7 @@ final class Shot {
     var yield: Double
     var waterTemp: Double
     var pressure: Double
+    var preInfPressure: Double = 0.0
     var preInfusion: Double
     var pull: Double
     var extractionRaw: String?
@@ -36,6 +37,7 @@ final class Shot {
         yield: Double = 38,
         waterTemp: Double = 93,
         pressure: Double = 9,
+        preInfPressure: Double = 0,
         preInfusion: Double = 0,
         pull: Double = 0,
         extraction: Extraction? = nil,
@@ -54,6 +56,7 @@ final class Shot {
         self.yield = yield
         self.waterTemp = waterTemp
         self.pressure = pressure
+        self.preInfPressure = preInfPressure
         self.preInfusion = preInfusion
         self.pull = pull
         self.extractionRaw = extraction?.rawValue

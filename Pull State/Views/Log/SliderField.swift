@@ -1,10 +1,15 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Stepped slider with an inline editable readout. There is no hidden `Slider`
-/// — the visible thumb is the only thing that exists, and a `DragGesture` on
-/// the visual track maps drag x-position to a stepped, clamped value. Tap on
-/// the readout flips the row into a focused decimal text field that commits
-/// on submit/blur.
+/// — the visible thumb is the only thing that exists, and a UIKit-backed pan
+/// recognizer (via `HorizontalDragView` on iOS / iPadOS / visionOS) maps drag
+/// x-position to a stepped, clamped value. The recognizer fails on
+/// vertical-first drags so the parent `ScrollView` receives them. Tap on the
+/// readout flips the row into a focused decimal text field that commits on
+/// submit/blur. See DESIGN.md §5.3 for the gesture spec.
 struct SliderField: View {
     let label: String
     @Binding var value: Double
@@ -108,23 +113,40 @@ struct SliderField: View {
                 }
                 .frame(height: 22)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                #if canImport(UIKit)
+                // UIKit-backed pan recognizer. Decides at the first ≥4pt of
+                // movement: predominantly horizontal AND starting within
+                // ±21pt of the thumb center activates the drag; everything
+                // else fails the recognizer so the parent UIScrollView's pan
+                // can claim the touch. shouldRecognizeSimultaneouslyWith
+                // returns true so the ScrollView's pan can track the touch
+                // concurrently from the start — there is no priority gap to
+                // wait through.
+                .overlay(
+                    HorizontalDragView(
+                        canBegin: { startX in
+                            let halfThumb: CGFloat = 9
+                            let forgiveness: CGFloat = 12
+                            let unclampedCenter = trackWidth * fraction
+                            let thumbCenter = max(halfThumb, min(trackWidth - halfThumb, unclampedCenter))
+                            let tolerance = halfThumb + forgiveness
+                            return abs(startX - thumbCenter) <= tolerance
+                        },
+                        onChanged: { x in update(from: x, width: trackWidth) }
+                    )
+                )
+                #else
+                // macOS fallback (no UIKit). Scroll passthrough isn't an
+                // issue with trackpad scroll semantics, so a plain SwiftUI
+                // DragGesture with the same 4pt latch + direction/tolerance
+                // gating is sufficient.
                 .contentShape(Rectangle())
-                // simultaneousGesture lets the parent ScrollView still receive
-                // vertical drags — `dragActive` decides whether *this* gesture
-                // commits a value change. Direction gating keeps vertical
-                // scroll smooth even when the touch started inside the knob's
-                // tolerance zone.
                 .simultaneousGesture(
-                    DragGesture(minimumDistance: 0)
+                    DragGesture(minimumDistance: 4)
                         .onChanged { g in
                             if dragActive == nil {
                                 let dx = abs(g.translation.width)
                                 let dy = abs(g.translation.height)
-                                // Defer the decision until the user has
-                                // actually moved — direction is ambiguous on
-                                // the very first touch sample.
-                                if dx < 4 && dy < 4 { return }
-
                                 let halfThumb: CGFloat = 9
                                 let forgiveness: CGFloat = 12
                                 let unclampedCenter = trackWidth * fraction
@@ -141,6 +163,7 @@ struct SliderField: View {
                             dragActive = nil
                         }
                 )
+                #endif
             }
             .frame(height: 22)
         }
@@ -175,3 +198,143 @@ struct SliderField: View {
         value = min(max(n, range.lowerBound), range.upperBound)
     }
 }
+
+#if canImport(UIKit)
+
+/// Transparent UIView overlay that hosts a `HorizontalDragRecognizer`. The
+/// view fills its SwiftUI overlay frame, receives touches, and forwards them
+/// to the recognizer. `canBegin` is consulted once per touch — at the moment
+/// the recognizer decides the drag is horizontal — and a `false` return fails
+/// the recognizer before it ever enters `.began`.
+private struct HorizontalDragView: UIViewRepresentable {
+    let canBegin: (CGFloat) -> Bool
+    let onChanged: (CGFloat) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = true
+        let recognizer = HorizontalDragRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handle(_:))
+        )
+        recognizer.delegate = context.coordinator
+        recognizer.canBegin = canBegin
+        view.addGestureRecognizer(recognizer)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.parent = self
+        // Refresh closures captured at the moment of update — `fraction` and
+        // `trackWidth` change every time the binding does, so the recognizer
+        // must see the latest tolerance window.
+        if let r = uiView.gestureRecognizers?.compactMap({ $0 as? HorizontalDragRecognizer }).first {
+            r.canBegin = canBegin
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var parent: HorizontalDragView
+        init(parent: HorizontalDragView) { self.parent = parent }
+
+        @objc func handle(_ g: HorizontalDragRecognizer) {
+            switch g.state {
+            case .began, .changed:
+                parent.onChanged(g.currentX)
+            default:
+                break
+            }
+        }
+
+        // Allow concurrent recognition with the parent UIScrollView's pan
+        // recognizer (and anything else upstream). Returning true on this
+        // side is sufficient — UIKit honors "either side says yes."
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            return true
+        }
+    }
+}
+
+/// Custom UIGestureRecognizer that stays in `.possible` until the user has
+/// moved ≥4pt, then commits to one of two terminal-or-active states:
+///   • Horizontal-dominant AND start within tolerance → `.began`, then
+///     `.changed` on subsequent moves, `.ended` on lift.
+///   • Vertical-dominant OR start outside tolerance → `.failed`. The
+///     parent UIScrollView's pan recognizer is free to claim the touch.
+/// Tapping without significant movement also resolves to `.failed`, so
+/// tap-to-jump never fires.
+private final class HorizontalDragRecognizer: UIGestureRecognizer {
+    var canBegin: (CGFloat) -> Bool = { _ in true }
+    private(set) var startX: CGFloat = 0
+    private(set) var currentX: CGFloat = 0
+    private var startLocation: CGPoint = .zero
+    private var decided: Bool = false
+    private let threshold: CGFloat = 4
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesBegan(touches, with: event)
+        guard let touch = touches.first, let view else {
+            state = .failed
+            return
+        }
+        startLocation = touch.location(in: view)
+        startX = startLocation.x
+        currentX = startLocation.x
+        decided = false
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesMoved(touches, with: event)
+        guard let touch = touches.first, let view else { return }
+        let current = touch.location(in: view)
+        currentX = current.x
+
+        if !decided {
+            let dx = abs(current.x - startLocation.x)
+            let dy = abs(current.y - startLocation.y)
+            if max(dx, dy) < threshold { return }
+            decided = true
+            if dx <= dy {
+                state = .failed
+                return
+            }
+            if !canBegin(startX) {
+                state = .failed
+                return
+            }
+            state = .began
+            return
+        }
+        state = .changed
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesEnded(touches, with: event)
+        if state == .began || state == .changed {
+            state = .ended
+        } else {
+            state = .failed
+        }
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesCancelled(touches, with: event)
+        state = .cancelled
+    }
+
+    override func reset() {
+        super.reset()
+        startLocation = .zero
+        startX = 0
+        currentX = 0
+        decided = false
+    }
+}
+
+#endif

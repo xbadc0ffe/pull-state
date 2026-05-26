@@ -60,6 +60,7 @@ final class AppSettings {
     var hasTipped: Bool
     var nextBagNumber: Int
     var seedDataInstalled: Bool
+    var autoRecipePromptEnabled: Bool = true
 
     init(
         appearance: AppearanceMode = .system,
@@ -67,7 +68,8 @@ final class AppSettings {
         hasCompletedOnboarding: Bool = false,
         hasTipped: Bool = false,
         nextBagNumber: Int = 1,
-        seedDataInstalled: Bool = false
+        seedDataInstalled: Bool = false,
+        autoRecipePromptEnabled: Bool = true
     ) {
         self.appearanceRaw = appearance.rawValue
         self.temperatureUnitRaw = temperatureUnit.rawValue
@@ -75,6 +77,7 @@ final class AppSettings {
         self.hasTipped = hasTipped
         self.nextBagNumber = nextBagNumber
         self.seedDataInstalled = seedDataInstalled
+        self.autoRecipePromptEnabled = autoRecipePromptEnabled
     }
 
     var appearance: AppearanceMode {

@@ -20,6 +20,8 @@ struct LogScreen: View {
 
     @Query(sort: \Equipment.createdAt, order: .reverse) private var allEquipment: [Equipment]
     @Query(sort: \Bean.createdAt, order: .reverse) private var beans: [Bean]
+    @Query private var settingsQuery: [AppSettings]
+    private var settings: AppSettings? { settingsQuery.first }
 
     // Stable per-instance tick publisher; recreating it inside body would
     // force SwiftUI to re-subscribe on every render.
@@ -34,6 +36,7 @@ struct LogScreen: View {
     @State private var yieldG: Double = 38.0
     @State private var waterTemp: Double = 93
     @State private var pressure: Double = 9
+    @State private var preInfPressure: Double = 4.0
     @State private var grind: String = ""
     @State private var usedPaperFilter: Bool = false
     @State private var extraction: Extraction? = nil
@@ -162,6 +165,11 @@ struct LogScreen: View {
         ) {
             Button(recipePromptConfirmLabel) {
                 applyRecipePrompt()
+            }
+            Button("Don't ask again") {
+                settings?.autoRecipePromptEnabled = false
+                try? context.save()
+                recipePrompt = nil
             }
             Button("Skip", role: .cancel) {
                 recipePrompt = nil
@@ -342,6 +350,7 @@ struct LogScreen: View {
                         unit: tempUnit.label,
                         decimals: tempUnit == .celsius ? 1 : 0
                     )
+                    SliderField(label: "Pre-Infusion Pressure", value: $preInfPressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
                     SliderField(label: "Pressure", value: $pressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
                     paperFilterRow
                 }
@@ -588,6 +597,7 @@ struct LogScreen: View {
     }
 
     private func evaluateRecipePrompt(bean: Bean, values: RecipePromptValues, shotRating: Int) {
+        guard settings?.autoRecipePromptEnabled ?? true else { return }
         let r = bean.recipe
         let recipeIsIncomplete = r.dose == nil || r.yield == nil || r.temp == nil || r.pullPressure == nil
         if recipeIsIncomplete {
@@ -680,6 +690,7 @@ struct LogScreen: View {
         if let y = r.yield { yieldG = y }
         if let t = r.temp { waterTemp = t }
         if let p = r.pullPressure { pressure = p }
+        if let pp = r.preInfPressure { preInfPressure = pp }
         if let g = r.grind { grind = g } else { grind = "" }
         lastLoadedBeanID = bean.persistentModelID
     }
@@ -741,6 +752,7 @@ struct LogScreen: View {
             yield: yieldG,
             temp: waterTemp,
             pressure: pressure,
+            preInfPressure: preInfPressure,
             grind: trimmedGrind,
             preInfusion: preInfusionSeconds,
             preInfusionUsed: preInfusionUsed,
@@ -758,6 +770,7 @@ struct LogScreen: View {
             yield: values.yield,
             waterTemp: values.temp,
             pressure: values.pressure,
+            preInfPressure: values.preInfPressure,
             preInfusion: preInfusionSeconds,
             pull: pullSeconds,
             extraction: extraction,
@@ -806,6 +819,7 @@ struct RecipePromptValues: Equatable {
     let yield: Double
     let temp: Double
     let pressure: Double
+    let preInfPressure: Double
     let grind: String
     let preInfusion: Double
     let preInfusionUsed: Bool

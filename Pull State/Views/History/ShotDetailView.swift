@@ -23,7 +23,7 @@ struct ShotDetailView: View {
     @State private var dYield: Double = 38
     @State private var dWaterTemp: Double = 93
     @State private var dPressure: Double = 9
-    @State private var dPreInfPressure: Double = 4
+    @State private var dPreInfPressure: Double = 1
     @State private var dPre: Double = 0
     @State private var dPull: Double = 0
     @State private var dRating: Int = 0
@@ -153,7 +153,7 @@ struct ShotDetailView: View {
                                 PSField(label: "Water Temp") { PSValueText(text: formattedTemp(shot.waterTemp), fontSize: 13.5) }
                                 PSField(label: "Pre-Infusion Pressure") { PSValueText(text: "\(formattedPressure(shot.preInfPressure)) bar", fontSize: 13.5) }
                                 PSField(label: "Pre-Infusion Time") { PSValueText(text: String(format: "%.1fs", shot.preInfusion), fontSize: 13.5) }
-                                PSField(label: "Pressure") { PSValueText(text: "\(formattedPressure(shot.pressure)) bar", fontSize: 13.5) }
+                                PSField(label: "Pull Pressure") { PSValueText(text: "\(formattedPressure(shot.pressure)) bar", fontSize: 13.5) }
                                 if shot.usedPaperFilter {
                                     PSField(label: "Pull Time") { PSValueText(text: String(format: "%.1fs", shot.pull), fontSize: 13.5) }
                                     PSField(label: "Paper Filter", last: true) { PSValueText(text: "Yes", fontSize: 13.5) }
@@ -312,8 +312,8 @@ struct ShotDetailView: View {
                         unit: tempUnit.label,
                         decimals: tempUnit == .celsius ? 1 : 0
                     )
-                    SliderField(label: "Pre-Infusion Pressure", value: $dPreInfPressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
-                    SliderField(label: "Pressure", value: $dPressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
+                    SliderField(label: "Pre-Infusion Pressure", value: $dPreInfPressure, range: 0...4, step: 0.1, unit: "bar", decimals: 1)
+                    SliderField(label: "Pull Pressure", value: $dPressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
                     SliderField(label: "Pre-infusion", value: $dPre, range: 0...20, step: 0.1, unit: "s", decimals: 1)
                     SliderField(label: "Pull", value: $dPull, range: 0...60, step: 0.1, unit: "s", decimals: 1)
                     HStack {
@@ -432,7 +432,7 @@ struct ShotDetailView: View {
         dYield = shot.yield
         dWaterTemp = shot.waterTemp
         dPressure = shot.pressure
-        dPreInfPressure = shot.preInfPressure
+        dPreInfPressure = min(max(shot.preInfPressure, 0), 4)
         dPre = shot.preInfusion
         dPull = shot.pull
         dRating = shot.rating

@@ -36,7 +36,7 @@ struct LogScreen: View {
     @State private var yieldG: Double = 38.0
     @State private var waterTemp: Double = 93
     @State private var pressure: Double = 9
-    @State private var preInfPressure: Double = 4.0
+    @State private var preInfPressure: Double = 1.0
     @State private var grind: String = ""
     @State private var usedPaperFilter: Bool = false
     @State private var extraction: Extraction? = nil
@@ -350,8 +350,8 @@ struct LogScreen: View {
                         unit: tempUnit.label,
                         decimals: tempUnit == .celsius ? 1 : 0
                     )
-                    SliderField(label: "Pre-Infusion Pressure", value: $preInfPressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
-                    SliderField(label: "Pressure", value: $pressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
+                    SliderField(label: "Pre-Infusion Pressure", value: $preInfPressure, range: 0...4, step: 0.1, unit: "bar", decimals: 1)
+                    SliderField(label: "Pull Pressure", value: $pressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
                     paperFilterRow
                 }
                 .padding(.horizontal, 14)
@@ -690,7 +690,7 @@ struct LogScreen: View {
         if let y = r.yield { yieldG = y }
         if let t = r.temp { waterTemp = t }
         if let p = r.pullPressure { pressure = p }
-        if let pp = r.preInfPressure { preInfPressure = pp }
+        if let pp = r.preInfPressure { preInfPressure = min(max(pp, 0), 4) }
         if let g = r.grind { grind = g } else { grind = "" }
         lastLoadedBeanID = bean.persistentModelID
     }

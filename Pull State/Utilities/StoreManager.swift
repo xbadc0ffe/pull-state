@@ -19,6 +19,11 @@ final class StoreManager {
     var product: Product?
     var purchaseInFlight = false
     var purchaseError: String?
+    var restoreInFlight = false
+
+    enum RestoreOutcome {
+        case restored, nothingToRestore, cancelled, failed
+    }
 
     init() {
         Task { await loadProductIfNeeded() }
@@ -41,6 +46,21 @@ final class StoreManager {
             }
         }
         return false
+    }
+
+    /// Forces a sync with the App Store, then re-reads the tip's entitlement.
+    /// A cancelled sign-in prompt is reported as `.cancelled`, not a failure.
+    func restore() async -> RestoreOutcome {
+        restoreInFlight = true
+        defer { restoreInFlight = false }
+        do {
+            try await AppStore.sync()
+        } catch StoreKitError.userCancelled {
+            return .cancelled
+        } catch {
+            return .failed
+        }
+        return await hasPriorEntitlement() ? .restored : .nothingToRestore
     }
 
     func purchase() async -> Bool {

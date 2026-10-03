@@ -11,6 +11,8 @@ struct AboutSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var store = StoreManager()
     @State private var purchaseSucceeded = false
+    @State private var restoreMessage: String?
+    @State private var restoreFailed = false
 
     var body: some View {
         ScrollView {
@@ -39,10 +41,12 @@ struct AboutSheet: View {
                         .frame(maxWidth: 160)
                         .padding(.vertical, 6)
                     PSDisplay("Pull State", size: 26)
-                    Text("v 1.3 · MAY 25 2026")
-                        .font(PSFont.mono(11))
-                        .tracking(1)
-                        .foregroundStyle(palette.inkMuted)
+                    if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
+                        Text("v \(version)")
+                            .font(PSFont.mono(11))
+                            .tracking(1)
+                            .foregroundStyle(palette.inkMuted)
+                    }
                 }
                 .padding(.top, 20)
                 .padding(.bottom, 8)
@@ -157,6 +161,51 @@ struct AboutSheet: View {
                 .disabled(settings.hasTipped || store.purchaseInFlight)
                 .padding(.horizontal, 18)
                 .padding(.top, 18)
+
+                // Restore purchases
+                Button {
+                    Task {
+                        restoreMessage = nil
+                        switch await store.restore() {
+                        case .restored:
+                            settings.hasTipped = true
+                            restoreFailed = false
+                            restoreMessage = "Purchase restored. Thanks for the coffee!"
+                        case .nothingToRestore:
+                            restoreFailed = false
+                            restoreMessage = "No previous purchase found."
+                        case .failed:
+                            restoreFailed = true
+                            restoreMessage = "Couldn't restore purchases. Try again later."
+                        case .cancelled:
+                            break
+                        }
+                    }
+                } label: {
+                    Text(store.restoreInFlight ? "Restoring…" : "Restore Purchases")
+                        .font(PSFont.body(13, weight: .bold))
+                        .foregroundStyle(palette.accent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(palette.lineStrong, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(store.restoreInFlight || store.purchaseInFlight)
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
+
+                if let restoreMessage {
+                    Text(restoreMessage)
+                        .font(PSFont.body(11))
+                        .foregroundStyle(restoreFailed ? palette.bad : palette.inkSoft)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 8)
+                        .padding(.horizontal, 18)
+                }
 
                 Text("A precision logbook for your espresso practice.\nMade for people who care about pulls.")
                     .font(PSFont.body(12))

@@ -14,7 +14,6 @@ struct BeanAddForm: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.psPalette) private var palette
-    @Environment(\.colorScheme) private var scheme
 
     @Query private var existingBeans: [Bean]
 
@@ -87,7 +86,7 @@ struct BeanAddForm: View {
                                     .strokeBorder(palette.accent, lineWidth: 0.5)
                             )
 
-                        labelGroup("Identity") {
+                        PSSection("Identity") {
                             PSCard {
                                 VStack(spacing: 0) {
                                     PSField(label: "Bean Name") {
@@ -100,7 +99,7 @@ struct BeanAddForm: View {
                             }
                         }
 
-                        labelGroup("Dates") {
+                        PSSection("Dates") {
                             PSCard {
                                 VStack(spacing: 0) {
                                     PSField(label: "Roast Date") {
@@ -119,21 +118,21 @@ struct BeanAddForm: View {
                             }
                         }
 
-                        labelGroup("Single Origin") {
+                        PSSection("Single Origin") {
                             PSCard {
                                 HStack {
                                     Text("Single Origin")
                                         .font(PSFont.body(13))
                                         .foregroundStyle(palette.inkSoft)
                                     Spacer()
-                                    PSToggle(isOn: $singleOrigin)
+                                    PSToggle(isOn: $singleOrigin, label: "Single Origin")
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 12)
                             }
                         }
 
-                        labelGroup("Roast Level") {
+                        PSSection("Roast Level") {
                             PSCard {
                                 HStack(spacing: 6) {
                                     ForEach(Roast.allCases) { r in
@@ -152,7 +151,7 @@ struct BeanAddForm: View {
                             }
                         }
 
-                        labelGroup("Process") {
+                        PSSection("Process") {
                             PSCard {
                                 VStack(alignment: .leading, spacing: 0) {
                                     FlowLayout(spacing: 6, lineSpacing: 8) {
@@ -184,7 +183,7 @@ struct BeanAddForm: View {
                             }
                         }
 
-                        labelGroup("Tasting Notes") {
+                        PSSection("Tasting Notes") {
                             PSCard {
                                 FlowLayout(spacing: 6, alignment: .leading) {
                                     ForEach(TastingTag.allCases) { tag in
@@ -207,7 +206,7 @@ struct BeanAddForm: View {
                             }
                         }
 
-                        labelGroup("Notes") {
+                        PSSection("Notes") {
                             PSCard {
                                 ZStack(alignment: .topLeading) {
                                     if notes.isEmpty {
@@ -228,7 +227,7 @@ struct BeanAddForm: View {
                             }
                         }
 
-                        labelGroup("Recipe") {
+                        PSSection("Recipe") {
                             RecipeBlock(recipe: $recipe, editing: true)
                         }
                     }
@@ -239,24 +238,16 @@ struct BeanAddForm: View {
                 .scrollIndicators(.hidden)
             }
         }
-        .environment(\.psPalette, PSPalette.resolve(for: scheme))
         .onChange(of: name) { _, _ in preloadFromMatchingBeanIfNeeded() }
         .onChange(of: roaster) { _, _ in preloadFromMatchingBeanIfNeeded() }
     }
 
-    @ViewBuilder
-    private func labelGroup<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PSSectionLabel(label).padding(.leading, 4)
-            content()
-        }
-    }
-
     private func save() {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let bean = Bean(
-            name: name.trimmingCharacters(in: .whitespaces).isEmpty ? "Untitled" : name,
+            name: trimmedName.isEmpty ? "Untitled" : trimmedName,
             bagNumber: nextBag,
-            roaster: roaster,
+            roaster: roaster.trimmingCharacters(in: .whitespacesAndNewlines),
             singleOrigin: singleOrigin,
             process: process,
             processOther: processOther,

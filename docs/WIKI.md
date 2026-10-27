@@ -9,8 +9,8 @@ The working reference for anyone (human or agent) touching this repo. DESIGN.md 
 | | |
 |---|---|
 | App | Pull State — local-only espresso shot logbook |
-| Platforms | iPhone + iPad (iOS / iPadOS 26.4+), single SwiftUI target |
-| Stack | SwiftUI, SwiftData, StoreKit 2, PhotosUI. No third-party dependencies |
+| Platforms | iPhone + iPad (iOS / iPadOS 26.0+), single SwiftUI target + unit-test target |
+| Stack | SwiftUI, SwiftData, StoreKit 2, PhotosUI, Swift 6 language mode. No third-party dependencies |
 | Bundle ID | `com.badc0ffe.pullstate` |
 | Team | ZWS3TP3W3Z |
 | Repo | github.com/xbadc0ffe/pull-state (MIT) |
@@ -27,6 +27,7 @@ pull-state/
 ├── README.md / SECURITY.md / LICENSE
 ├── Pull State.xcodeproj/     single target "Pull State", shared scheme "Pull State"
 ├── Pull State/               app sources (see §3)
+├── Pull StateTests/          Swift Testing unit tests (recipe prompt rules, codable, formatters)
 ├── docs/
 │   ├── DESIGN.md             full design + behaviour spec (screens, data model, timer, IAP)
 │   ├── WIKI.md               this file
@@ -43,13 +44,13 @@ pull-state/
 | `Pull_StateApp.swift` | `@main`; builds the `ModelContainer`, installs `SelectAllOnFocus` |
 | `Models/` | SwiftData `@Model`s: `Shot`, `Bean`, `Equipment`, `AppSettings`; value types `Recipe`, `BeanRatingPoint`; enums |
 | `Resources/` | `Theme.swift` (palette, fonts, formatters, env keys), `PullState.storekit` |
-| `Utilities/` | `StoreManager` (StoreKit 2), `SeedData` (settings singleton), `HardwareCatalog`, `SwipeBackFix`, `SelectAllOnFocus` |
+| `Utilities/` | `StoreManager` (StoreKit 2), `RecipePromptEvaluator` (pure prompt rules), `PSThumbnailCache`, `SeedData`, `HardwareCatalog`, `SwipeBackFix`, `SelectAllOnFocus` |
 | `Views/RootView.swift` | onboarding ↔ main switch, applies colour scheme |
 | `Views/MainTabView.swift` | the single `NavigationStack`, `NavRoute`, tab switch, About/Add sheets |
 | `Views/Components/` | `PS*` design-system views (card, field, pill, stars, nav bar, tab bar, photo picker/crop/thumb, toggle, layout) |
 | `Views/Log/` | Log tab: `LogScreen`, `DualTrackTimer`, `SliderField`, `PickerRow` |
 | `Views/History/` | History tab, `ShotCard`, `ShotDetailView`, filter + sort sheets |
-| `Views/Beans/` | Beans tab, `BeanDetailView`, `BeanAddForm`, `RecipeBlock`, `RecipeSheet`, `RatingChart` |
+| `Views/Beans/` | Beans tab, `BeanDetailView`, `BeanAddForm`, `RecipeRows` (shared), `RecipeBlock`, `RecipeSheet`, `RatingChart` |
 | `Views/Hardware/` | Hardware tab, detail, add form |
 | `Views/Onboarding/` | four-step onboarding; also home of `OnbField` / `OnbCombobox` |
 | `Views/About/` | About sheet, `ModeSwitch`, `TempUnitSwitch` |
@@ -58,7 +59,7 @@ pull-state/
 
 ## 3. Architecture in five lines
 
-1. **One `NavigationStack`** in `MainTabView`; tabs are a state switch, detail screens push via `NavRoute(PersistentIdentifier)` and render their own `PSNavBar`.
+1. **One `NavigationStack`** in `MainTabView`; all four tab screens stay mounted (opacity-switched) so Log state survives tab changes; detail screens push via `NavRoute(PersistentIdentifier)` and render their own `PSNavBar`.
 2. **Design system via environment.** `\.psPalette` (resolved from `colorScheme`) and `\.psTempUnit` are injected once in `MainTabView`. Sheets do not inherit environment: every `.sheet { }` re-applies both.
 3. **SwiftData, local only.** Four models, cascade on bean→shots, nullify on equipment→shots. Photos use `@Attribute(.externalStorage)`. `AppSettings` is a singleton row created by `SeedData`.
 4. **`Recipe` is a Codable value** stored as JSON on `Bean`; every field optional, nil means "not specified". Temperatures are stored in Celsius everywhere and converted only at the UI edge.
@@ -76,6 +77,8 @@ Read DESIGN.md §2–§6 before changing navigation, the data model, the recipe-
 - Never call `.navigationBarBackButtonHidden(true)`; it kills the swipe-back gesture.
 - Every photo entry point goes through `PSPhotoSourceMenu` → `PSPhotoCropSheet` (square JPEG).
 - Strings are English-only and hard-coded; date formats are fixed `yyyy-MM-dd HH:mm`.
+- Fonts go through `PSFont` (Dynamic Type scaled, capped 1.5×); every `PSIconBtn` needs an accessibility label; `PSToggle` takes one too.
+- Pure logic (recipe prompt rules, conversions, formatters) gets a unit test in `Pull StateTests`.
 - Doc comments on every type explain *why* it exists; keep them current when behaviour changes.
 - When a screen's behaviour changes, update the matching DESIGN.md section in the same commit.
 
@@ -89,6 +92,9 @@ Work is written on Windows, pushed to GitHub, and built on the headless Mac mini
 # compile-only sanity check (no signing)
 xcodebuild build -scheme "Pull State" -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
 
+# unit tests on the simulator
+xcodebuild test -scheme "Pull State" -destination 'platform=iOS Simulator,name=iPhone 17'
+
 # archive, sign with the ASC API key and upload to TestFlight
 ship "Pull State" 1.5          # ~/bin/ship; pulls first, build number = timestamp
 ```
@@ -99,7 +105,7 @@ ship "Pull State" 1.5          # ~/bin/ship; pulls first, build number = timesta
 - Archives land in `~/Archives`; prune when disk is tight.
 - If signing fails with a keychain error the login keychain is locked: `security unlock-keychain ~/Library/Keychains/login.keychain-db`.
 
-Simulator tip-jar testing needs `PullState.storekit` selected under the scheme's Run → Options → StoreKit Configuration (not currently saved in the shared scheme).
+The shared scheme already selects `PullState.storekit` (Run → Options → StoreKit Configuration), so the tip jar works in the Simulator.
 
 ---
 
@@ -112,7 +118,7 @@ Simulator tip-jar testing needs `PullState.storekit` selected under the scheme's
 | 1.2 | Full-width scroll, editable photo headers, paper-filter filter, light/dark icons |
 | 1.3 | Data protection entitlement, pre-infusion pressure, recipe-prompt toggle, slider scroll passthrough |
 | 1.4 | Pre-infusion pressure slider range, pull pressure label, Restore Purchases, version read from bundle |
-| 1.5 | Documentation pass (audit, wiki, CLAUDE.md); no functional change — baseline for the cleanup round |
+| 1.5 | Documentation pass (audit, wiki, CLAUDE.md), then the audit cleanup: Log state survives tab switches, °F recipe fix, notes no longer select-all, downscaled + cached photos, StoreKit transaction listener, Dynamic Type, accessibility, iOS-only build config, Swift 6, unit tests |
 
 ---
 
@@ -120,9 +126,9 @@ Simulator tip-jar testing needs `PullState.storekit` selected under the scheme's
 
 | Task | Start at |
 |---|---|
-| Change what happens after Save Shot | `LogScreen.save()` → `evaluateRecipePrompt` (rules in DESIGN.md §3.1) |
+| Change what happens after Save Shot | `Utilities/RecipePromptEvaluator.swift` (rules in DESIGN.md §3.1, tests in `Pull StateTests`) |
 | Add a field to a shot | `Models/Shot.swift` (inline default!), `LogScreen` state + `save()`, `ShotDetailView` draft/commit, DESIGN.md §4.2 |
-| Add a recipe field | `Models/Recipe.swift` (CodingKeys + decodeIfPresent), `RecipeBlock`, `RecipeSheet`, preload in `LogScreen.preloadFromBean` |
+| Add a recipe field | `Models/Recipe.swift` (CodingKeys + decodeIfPresent), `RecipeBlock` + `RecipeSheet` (rows from `RecipeRows.swift`), preload in `LogScreen.preloadFromBean` |
 | Tweak colours or type | `Resources/Theme.swift` |
 | Timer behaviour | `LogScreen` state machine + `DualTrackTimer` (DESIGN.md §6) |
 | Hardware autocomplete list | `Utilities/HardwareCatalog.swift` |

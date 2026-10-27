@@ -1,8 +1,11 @@
 import SwiftUI
 
+/// Circular icon button used in nav bars. `label` is the VoiceOver name and
+/// is required at every call site — an SF Symbol name like "ellipsis" is not
+/// an acceptable accessibility label.
 struct PSIconBtn: View {
     let systemName: String
-    var label: String = ""
+    let label: String
     var size: CGFloat = 32
     let action: () -> Void
     @Environment(\.psPalette) private var palette
@@ -19,22 +22,6 @@ struct PSIconBtn: View {
                 )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(label.isEmpty ? systemName : label)
-    }
-}
-
-struct PSTextBtn: View {
-    let label: String
-    var bold: Bool = false
-    let action: () -> Void
-    @Environment(\.psPalette) private var palette
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(PSFont.body(14, weight: bold ? .bold : .regular))
-                .foregroundStyle(palette.accent)
-        }
-        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }

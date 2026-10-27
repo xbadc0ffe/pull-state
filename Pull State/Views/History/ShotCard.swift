@@ -5,11 +5,7 @@ struct ShotCard: View {
     @Environment(\.psPalette) private var palette
 
     private var tone: PSPillTone {
-        switch shot.extraction {
-        case .sour: return .sour
-        case .bitter: return .bitter
-        default: return .perfect
-        }
+        shot.extraction.map(PSPillTone.init) ?? .perfect
     }
 
     var body: some View {
@@ -51,7 +47,7 @@ struct ShotCard: View {
                         Text("-")
                         Text(String(format: "1:%.2f", shot.ratio))
                         Text("-")
-                        Text("\(formatted(shot.dose))g → \(formatted(shot.yield))g")
+                        Text("\(PSFmt.number(shot.dose))g → \(PSFmt.number(shot.yield))g")
                     }
                     .font(PSFont.mono(10))
                     .foregroundStyle(palette.inkSoft)
@@ -70,9 +66,5 @@ struct ShotCard: View {
             }
             .padding(12)
         }
-    }
-
-    private func formatted(_ d: Double) -> String {
-        d == d.rounded() ? "\(Int(d))" : String(format: "%.1f", d)
     }
 }

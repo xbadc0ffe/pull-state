@@ -6,7 +6,6 @@ struct ShotDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.psPalette) private var palette
-    @Environment(\.colorScheme) private var scheme
     @Environment(\.psTempUnit) private var tempUnit
 
     @Query private var shots: [Shot]
@@ -50,7 +49,7 @@ struct ShotDetailView: View {
             PSPageBackground()
             VStack(spacing: 0) {
                 PSNavBar(title: editing ? "Edit shot" : "Shot detail") {
-                    PSIconBtn(systemName: "chevron.left", action: { dismiss() })
+                    PSIconBtn(systemName: "chevron.left", label: "Back", action: { dismiss() })
                 } trailing: {
                     if let shot {
                         if editing {
@@ -94,7 +93,6 @@ struct ShotDetailView: View {
                 }
             }
         }
-        .environment(\.psPalette, PSPalette.resolve(for: scheme))
         .alert("Delete this shot?", isPresented: $showDeleteConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
@@ -131,7 +129,7 @@ struct ShotDetailView: View {
                         PSStars(staticValue: shot.rating, size: 18)
                     }
                     if let ex = (editing ? dExtraction : shot.extraction) {
-                        PSPill(label: ex.rawValue, active: true, tone: tone(ex), horizontalPadding: 10, verticalPadding: 5)
+                        PSPill(label: ex.rawValue, active: true, tone: PSPillTone(ex), horizontalPadding: 10, verticalPadding: 5)
                     }
                 }
 
@@ -144,16 +142,16 @@ struct ShotDetailView: View {
                     notesEditor
                     deleteButton
                 } else {
-                    section("Numbers") {
+                    PSSection("Numbers") {
                         PSCard {
                             VStack(spacing: 0) {
                                 PSField(label: "Dose") { PSValueText(text: String(format: "%.1fg", shot.dose), fontSize: 13.5) }
                                 PSField(label: "Yield", suffix: String(format: "%.1fg", shot.yield)) { PSValueText(text: String(format: "1:%.2f", shot.ratio), fontSize: 13.5) }
                                 PSField(label: "Grind") { PSValueText(text: shot.grindSetting.isEmpty ? "—" : shot.grindSetting, fontSize: 13.5) }
                                 PSField(label: "Water Temp") { PSValueText(text: formattedTemp(shot.waterTemp), fontSize: 13.5) }
-                                PSField(label: "Pre-Infusion Pressure") { PSValueText(text: "\(formattedPressure(shot.preInfPressure)) bar", fontSize: 13.5) }
+                                PSField(label: "Pre-Infusion Pressure") { PSValueText(text: "\(PSFmt.number(shot.preInfPressure)) bar", fontSize: 13.5) }
                                 PSField(label: "Pre-Infusion Time") { PSValueText(text: String(format: "%.1fs", shot.preInfusion), fontSize: 13.5) }
-                                PSField(label: "Pull Pressure") { PSValueText(text: "\(formattedPressure(shot.pressure)) bar", fontSize: 13.5) }
+                                PSField(label: "Pull Pressure") { PSValueText(text: "\(PSFmt.number(shot.pressure)) bar", fontSize: 13.5) }
                                 if shot.usedPaperFilter {
                                     PSField(label: "Pull Time") { PSValueText(text: String(format: "%.1fs", shot.pull), fontSize: 13.5) }
                                     PSField(label: "Paper Filter", last: true) { PSValueText(text: "Yes", fontSize: 13.5) }
@@ -164,7 +162,7 @@ struct ShotDetailView: View {
                         }
                     }
 
-                    section("Hardware") {
+                    PSSection("Hardware") {
                         PSCard {
                             VStack(spacing: 0) {
                                 PSField(label: "Machine") { PSValueText(text: shot.machine?.name ?? "—", fontSize: 13.5) }
@@ -173,7 +171,7 @@ struct ShotDetailView: View {
                         }
                     }
 
-                    section("Tasting notes") {
+                    PSSection("Tasting notes") {
                         if shot.tags.isEmpty {
                             Text("No tags")
                                 .font(PSFont.body(12))
@@ -186,7 +184,7 @@ struct ShotDetailView: View {
                     }
 
                     if !shot.notes.isEmpty {
-                        section("Notes") {
+                        PSSection("Notes") {
                             PSCard {
                                 Text(shot.notes)
                                     .font(PSFont.body(13.5))
@@ -217,7 +215,7 @@ struct ShotDetailView: View {
         if editing {
             PSEditablePhotoHeader(data: $dPhotoData, label: "SHOT PHOTO")
         } else {
-            PSPhotoThumb(data: shot.photoData, label: "SHOT PHOTO", radius: 14)
+            PSPhotoThumb(data: shot.photoData, label: "SHOT PHOTO", radius: 14, hero: true)
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
         }
@@ -227,7 +225,7 @@ struct ShotDetailView: View {
 
     @ViewBuilder
     private var sourcePickers: some View {
-        section("Source") {
+        PSSection("Source") {
             PSCard {
                 VStack(spacing: 0) {
                     PickerRow(
@@ -262,13 +260,13 @@ struct ShotDetailView: View {
 
     @ViewBuilder
     private var extractionPicker: some View {
-        section("Extraction") {
+        PSSection("Extraction") {
             HStack(spacing: 8) {
                 ForEach(Extraction.allCases) { ex in
                     PSPill(
                         label: ex.rawValue,
                         active: dExtraction == ex,
-                        tone: tone(ex),
+                        tone: PSPillTone(ex),
                         horizontalPadding: 8,
                         verticalPadding: 11,
                         fontSize: 13,
@@ -282,7 +280,7 @@ struct ShotDetailView: View {
 
     @ViewBuilder
     private var tagsPicker: some View {
-        section("Tasting notes") {
+        PSSection("Tasting notes") {
             FlowLayout(spacing: 6) {
                 ForEach(TastingTag.allCases) { tag in
                     PSPill(
@@ -299,7 +297,7 @@ struct ShotDetailView: View {
 
     @ViewBuilder
     private var numbersEditableCard: some View {
-        section("Settings") {
+        PSSection("Settings") {
             PSCard {
                 VStack(spacing: 0) {
                     SliderField(label: "Dose", value: $dDose, range: 7...25, step: 0.1, unit: "g", decimals: 1)
@@ -314,14 +312,14 @@ struct ShotDetailView: View {
                     )
                     SliderField(label: "Pre-Infusion Pressure", value: $dPreInfPressure, range: 0...4, step: 0.1, unit: "bar", decimals: 1)
                     SliderField(label: "Pull Pressure", value: $dPressure, range: 4...12, step: 0.1, unit: "bar", decimals: 1)
-                    SliderField(label: "Pre-infusion", value: $dPre, range: 0...20, step: 0.1, unit: "s", decimals: 1)
-                    SliderField(label: "Pull", value: $dPull, range: 0...60, step: 0.1, unit: "s", decimals: 1)
+                    SliderField(label: "Pre-infusion", value: $dPre, range: 0...60, step: 0.1, unit: "s", decimals: 1)
+                    SliderField(label: "Pull", value: $dPull, range: 0...120, step: 0.1, unit: "s", decimals: 1)
                     HStack {
                         Text("Paper Filter")
                             .font(PSFont.body(13, weight: .medium))
                             .foregroundStyle(palette.inkSoft)
                         Spacer()
-                        PSToggle(isOn: $dPaperFilter)
+                        PSToggle(isOn: $dPaperFilter, label: "Paper Filter")
                     }
                     .padding(.vertical, 12)
                 }
@@ -333,7 +331,7 @@ struct ShotDetailView: View {
 
     @ViewBuilder
     private func dateEditCard(for shot: Shot) -> some View {
-        section("Date / Time") {
+        PSSection("Date / Time") {
             PSCard {
                 HStack {
                     DatePicker("", selection: $dDate)
@@ -350,7 +348,7 @@ struct ShotDetailView: View {
 
     @ViewBuilder
     private var notesEditor: some View {
-        section("Notes") {
+        PSSection("Notes") {
             PSCard {
                 ZStack(alignment: .topLeading) {
                     if dNotes.isEmpty {
@@ -395,27 +393,9 @@ struct ShotDetailView: View {
 
     // MARK: - Helpers
 
-    @ViewBuilder
-    private func section<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PSSectionLabel(label).padding(.leading, 4)
-            content()
-        }
-    }
-
-    private func tone(_ ex: Extraction) -> PSPillTone {
-        switch ex { case .sour: return .sour; case .perfect: return .perfect; case .bitter: return .bitter }
-    }
-
-    private func formattedPressure(_ p: Double) -> String {
-        p == p.rounded() ? "\(Int(p))" : String(format: "%.1f", p)
-    }
-
     private func formattedTemp(_ celsius: Double) -> String {
         let v = tempUnit.display(celsius: celsius)
-        let s = tempUnit == .celsius
-            ? (v == v.rounded() ? "\(Int(v))" : String(format: "%.1f", v))
-            : "\(Int(v.rounded()))"
+        let s = tempUnit == .celsius ? PSFmt.number(v) : "\(Int(v.rounded()))"
         return "\(s)\(tempUnit.label)"
     }
 

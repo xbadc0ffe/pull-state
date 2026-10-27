@@ -132,7 +132,7 @@ struct TimerTrack: View {
                 if editing {
                     HStack(spacing: 2) {
                         TextField("", text: $draft)
-                            .modifier(PSDecimalKeyboard(active: true))
+                            .keyboardType(.decimalPad)
                             .font(PSFont.mono(13, weight: .semibold))
                             .foregroundStyle(palette.ink)
                             .multilineTextAlignment(.trailing)

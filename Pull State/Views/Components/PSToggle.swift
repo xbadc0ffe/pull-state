@@ -1,7 +1,12 @@
 import SwiftUI
 
+/// Custom switch matching the warm palette. `label` is only used for
+/// VoiceOver (the visible label is rendered by the caller's row), via an
+/// accessibility representation so the control reads as a real switch with
+/// an on/off value.
 struct PSToggle: View {
     @Binding var isOn: Bool
+    var label: String = ""
     @Environment(\.psPalette) private var palette
 
     var body: some View {
@@ -26,5 +31,8 @@ struct PSToggle: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityRepresentation {
+            Toggle(label, isOn: $isOn)
+        }
     }
 }

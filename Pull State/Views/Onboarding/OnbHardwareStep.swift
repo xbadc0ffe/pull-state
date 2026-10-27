@@ -87,6 +87,9 @@ struct OnbCombobox: View {
 
     @Environment(\.psPalette) private var palette
     @State private var open = false
+    /// Set when a suggestion is tapped so the resulting `text` change does not
+    /// re-open the list that the tap just closed.
+    @State private var suppressReopen = false
     @FocusState private var focused: Bool
 
     private var filtered: [String] {
@@ -114,7 +117,11 @@ struct OnbCombobox: View {
                         if new { open = true }
                     }
                     .onChange(of: text) { _, _ in
-                        open = true
+                        if suppressReopen {
+                            suppressReopen = false
+                        } else {
+                            open = true
+                        }
                     }
 
                 Button {
@@ -145,6 +152,7 @@ struct OnbCombobox: View {
                                 ForEach(filtered, id: \.self) { opt in
                                     let active = opt == text
                                     Button {
+                                        suppressReopen = text != opt
                                         text = opt
                                         onSelect?(opt)
                                         open = false

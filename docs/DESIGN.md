@@ -27,7 +27,7 @@ The tab bar is a custom rounded chrome at the bottom of the screen (`PSTabBar`),
 
 ### Navigation model
 
-A single `NavigationStack` lives in `MainTabView`. Tab switches are state-driven, not pushed. Detail views are pushed onto the stack via a `NavRoute` enum:
+A single `NavigationStack` lives in `MainTabView`. Tab switches are state-driven, not pushed: all four tab screens stay mounted in a `ZStack` and the inactive ones are hidden with opacity (`allowsHitTesting(false)`, `accessibilityHidden(true)`), so a running timer or a half-written shot on the Log tab survives a visit to History. Detail views are pushed onto the stack via a `NavRoute` enum:
 
 ```
 enum NavRoute: Hashable {
@@ -37,7 +37,7 @@ enum NavRoute: Hashable {
 }
 ```
 
-Detail views render their own `PSNavBar` with a chevron back button. The system navigation bar is hidden via `.toolbar(.hidden, for: .navigationBar)` (gated for iOS via the `HideNavBar` modifier so the build still compiles for macOS). Critically, **`.navigationBarBackButtonHidden(true)` is never called anywhere** — that modifier silently disables the interactive swipe-from-left pop gesture. To make swipe-back continue working even with a hidden toolbar, a `UINavigationController` extension (`Utilities/SwipeBackFix.swift`, see §15.1) installs itself as the `interactivePopGestureRecognizer` delegate.
+Detail views render their own `PSNavBar` with a chevron back button. The system navigation bar is hidden via `.toolbar(.hidden, for: .navigationBar)`. Critically, **`.navigationBarBackButtonHidden(true)` is never called anywhere** — that modifier silently disables the interactive swipe-from-left pop gesture. To make swipe-back continue working even with a hidden toolbar, a `UINavigationController` extension (`Utilities/SwipeBackFix.swift`, see §15.1) installs itself as the `interactivePopGestureRecognizer` delegate.
 
 Sheet presentations propagate `\.psPalette` and `\.psTempUnit` into the sheet's environment explicitly — sheets do not inherit environment by default in SwiftUI, so each `.sheet { … .environment(\.psPalette, palette).environment(\.psTempUnit, settings.temperatureUnit) }` block sets them.
 
@@ -82,12 +82,12 @@ Section order, top to bottom:
 
 **After saving:** at most one of two prompts may appear (mutually exclusive):
 
-- **"Save recipe?"** — fires when the bean's recipe is missing any of `dose`/`yield`/`temp`/`pullPressure`. Title: `Save recipe?`, message: `Save these settings as the recipe for {bean name}?`, buttons: **Save Recipe** / **Skip**. Save writes the shot's values into the bean's recipe **only filling nil fields** — including `grind`, `preInfTime`, and `pullTime` when the shot has a value for them — and never overwrites an already-set field.
-- **"Adjust recipe?"** — fires when the recipe is complete (all four required fields non-nil), the just-saved shot's rating is `>= max(rating)` across the bean's other shots, AND any logged value differs from the recipe. Difference rules: `dose` and `yield` use **±10% tolerance** of the recipe value; `waterTemp` and `pullPressure` use exact comparison (epsilon `0.01`); `preInfTime` and `pullTime` only count as differing when the recipe field is non-nil, the user actually used the timer for that track, and the logged time falls outside the green window (±1 s pre, ±3 s pull). Title: `Adjust recipe?`, message: `This pull matches or beats your best for {bean name}. Update the recipe with these settings?`, buttons: **Update Recipe** / **Skip**. Update **overwrites all four required fields** unconditionally, plus `grind`/`preInfTime`/`pullTime` whenever the shot has a value for them (skip if the shot value is absent — never write nil over an existing recipe value).
+- **"Save recipe?"** — fires when the bean's recipe is missing any of `dose`/`yield`/`temp`/`pullPressure`. Title: `Save recipe?`, message: `Save these settings as the recipe for {bean name}?`, buttons: **Save Recipe** / **Don't ask again** / **Skip** (*Don't ask again* flips `AppSettings.autoRecipePromptEnabled` off; the About sheet's "Recipe Suggestions" toggle turns it back on). Save writes the shot's values into the bean's recipe **only filling nil fields** — including `grind`, `preInfTime`, and `pullTime` when the shot has a value for them — and never overwrites an already-set field.
+- **"Adjust recipe?"** — fires when the recipe is complete (all four required fields non-nil), the just-saved shot's rating is `>= max(rating)` across the bean's other shots, AND any logged value differs from the recipe. Difference rules: `dose` and `yield` use **±10% tolerance** of the recipe value; `waterTemp` uses a **0.6 °C tolerance** (just over one Fahrenheit slider step, so °F users aren't prompted for a one-notch nudge); `pullPressure` uses exact comparison (epsilon `0.01`); `preInfTime` and `pullTime` only count as differing when the recipe field is non-nil, the user actually used the timer for that track, and the logged time falls outside the green window (±1 s pre, ±3 s pull). Title: `Adjust recipe?`, message: `This pull matches or beats your best for {bean name}. Update the recipe with these settings?`, buttons: **Update Recipe** / **Don't ask again** / **Skip**. Update **overwrites all four required fields** unconditionally, plus `grind`/`preInfTime`/`pullTime` whenever the shot has a value for them (skip if the shot value is absent — never write nil over an existing recipe value).
 
-If neither condition is met, no prompt appears. Both prompts use `Bean.shots` (which already includes the just-inserted shot) when computing the rating maximum.
+If neither condition is met, no prompt appears. Both prompts use `Bean.shots` (which already includes the just-inserted shot) when computing the rating maximum. The decision and the two apply strategies are pure functions in `Utilities/RecipePromptEvaluator.swift`, covered by unit tests in `Pull StateTests`.
 
-**Keyboard handling:** the scroll view uses `.scrollDismissesKeyboard(.interactively)` plus a `simultaneousGesture(TapGesture)` that calls `dismissKeyboard()` (UIKit `resignFirstResponder` shim), so tapping outside the manual-time entry field dismisses its keyboard immediately. See §15 for the global "select all on focus" behavior that applies to every editable text/numeric field.
+**Keyboard handling:** the scroll view uses `.scrollDismissesKeyboard(.interactively)` plus a `simultaneousGesture(TapGesture)` that calls `dismissKeyboard()` (UIKit `resignFirstResponder` shim), so tapping outside the manual-time entry field dismisses its keyboard immediately. See §15 for the global "select all on focus" behavior that applies to every single-line text/numeric field.
 
 ### 3.2 History
 
@@ -95,7 +95,7 @@ If neither condition is met, no prompt appears. Both prompts use `Bean.shots` (w
 
 **Populated:**
 - Large title with subtitle "N SHOTS LOGGED"
-- Three stat cards: SHOTS / GRAMS (sum of yield) / AVG ★ (the AVG card uses accent color)
+- Three stat cards: SHOTS / GRAMS (sum of yield) / AVG ★ (the AVG card uses accent color; the average covers **rated shots only** — a rating of 0 means "unrated", not zero stars)
 - Filter chip (with badge showing active filter count) + Sort chip + filtered/total ratio
 - Vertical list of `ShotCard` rows, each tappable to push `ShotDetailView`
 
@@ -117,7 +117,7 @@ If neither condition is met, no prompt appears. Both prompts use `Bean.shots` (w
 - Detail timestamp footer
 
 **Shot detail (edit mode):**
-Same screen, but every field becomes editable: source pickers, extraction, tags (rendered in `FlowLayout` matching Log spacing), seven sliders inside the Settings card (dose, yield, temp, pre-infusion pressure, pull pressure, pre-infusion time, pull time) with the same ranges as the Log screen and the same C/F display conversion, then a **Paper Filter** `PSToggle` row at the **bottom** of the Settings card (mirroring Log's placement below Pull Pressure). The square photo at the top of the screen is itself the editable surface — `PSEditablePhotoHeader` (§14) carries the pencil-overlay button that opens `PSPhotoSourceMenu`, so there is no separate Photo section in edit mode. Below the Settings card: date picker, notes editor. Cancel + Save in the nav bar trailing slot. A red **Delete shot** button at the bottom triggers a confirmation alert.
+Same screen, but every field becomes editable: source pickers, extraction, tags (rendered in `FlowLayout` matching Log spacing), seven sliders inside the Settings card (dose, yield, temp, pre-infusion pressure, pull pressure, pre-infusion time 0–60 s, pull time 0–120 s) with the same C/F display conversion as the Log screen; a value outside a slider's range (a 150 s pull entered manually on Log) is still shown exactly, with the thumb pinned at the end, then a **Paper Filter** `PSToggle` row at the **bottom** of the Settings card (mirroring Log's placement below Pull Pressure). The square photo at the top of the screen is itself the editable surface — `PSEditablePhotoHeader` (§14) carries the pencil-overlay button that opens `PSPhotoSourceMenu`, so there is no separate Photo section in edit mode. Below the Settings card: date picker, notes editor. Cancel + Save in the nav bar trailing slot. A red **Delete shot** button at the bottom triggers a confirmation alert.
 
 ### 3.3 Beans
 
@@ -130,9 +130,9 @@ List of `BeanRowCard`s sorted by bag number descending. Each card shows: bag pho
 - Name + "BAG #X"
 - Roaster line, with the **roast date and purchase date** rendered just below it as a single small caption (`PSFmt.longDate` — `Month Day, Year` via `DateFormatter.dateStyle = .long`, joined by `·`). The Dates card has been removed from view mode in v1.2; both dates appear once, in this header position.
 - A `FlowLayout` containing the roast badge, the process chip, the optional **Single Origin** accent chip, and **inline tasting-tag chips** — each tasting tag from `bean.tastingTags` renders as a small uppercased text chip styled to match the process chip (same mono font, padding, surface background). The whole row wraps when needed. The tags are the bag's claimed flavor profile (what the label says to expect), independent from `Shot.tagsRaw` — they are still never surfaced on the Log screen, on shot detail, or in History. There is no longer a standalone "Tasting Notes" section on view mode.
-- **Rating trend chart** — `RatingChart`, a Path-drawn line chart. The visible viewport sizes for **10 slots** (most-recent shots fill from the right; if fewer than 10 shots exist, points sit on the left and the right slots stay empty). When more than 10 shots exist the chart is **horizontally scrollable** (`ScrollView(.horizontal)` with a fixed Y-axis column outside the scroll area) and starts scrolled to the trailing edge so the newest shots are visible. The line is a uniform **Catmull-Rom curve** (factor `1/6`) built from `Path.addCurve(to:control1:control2:)` and **passes exactly through every data point** — interpolation, not approximation. Dots, gridlines, MM-DD x labels, and the translucent fill below the curve carry over from the original sparkline.
+- **Rating trend chart** — `RatingChart`, a Path-drawn line chart over the bean's **rated** shots (rating 0 = unrated, excluded; the footer average excludes them too). The visible viewport sizes for **10 slots** (most-recent shots fill from the right; if fewer than 10 shots exist, points sit on the left and the right slots stay empty). When more than 10 shots exist the chart is **horizontally scrollable** (`ScrollView(.horizontal)` with a fixed Y-axis column outside the scroll area) and starts scrolled to the trailing edge so the newest shots are visible. The line is a uniform **Catmull-Rom curve** (factor `1/6`) built from `Path.addCurve(to:control1:control2:)` and **passes exactly through every data point** — interpolation, not approximation. Dots, gridlines, MM-DD x labels, and the translucent fill below the curve carry over from the original sparkline.
 - Notes card (if any)
-- **Recipe card** — inline-editable. Tap "Edit" to flip the recipe block into edit mode (Cancel / Save). The recipe object lives as JSON `Data` on the bean; see §4. Each row shows "—" when its underlying field is nil.
+- **Recipe card** — inline-editable. Tap "Edit" to flip the recipe block into edit mode (Cancel / Save). The recipe object lives as JSON `Data` on the bean; see §4. Each row shows "—" when its underlying field is nil. The rows are the shared `RecipeRows.swift` views (also used by `RecipeSheet`), so the Water Temp row converts through `\.psTempUnit` here exactly as it does on the Log screen.
 - Footer: shot count + average rating
 
 **Bean detail (edit mode):**
@@ -176,9 +176,9 @@ Presented from any tab via the `…` (ellipsis) icon in the top-right of the nav
 - × close button (top-right)
 - App logo — `Image("badc0ffe-logo")` from the asset catalog, capped at 160 pt wide
 - Title "Pull State"
-- Version line "v 1.2 · MAY 08 2026"
-- Card with rows: **Built by** (badc0ffe), **Contact** (info@badc0ffe.net), **GitHub** (tappable `Link` to `https://github.com/xbadc0ffe/pull-state`, accent-colored + underlined), **Temperature** (Celsius / Fahrenheit switch — see §11.1), **Appearance** (System / Light / Dark switch)
-- **Tip jar** — see §10
+- Version line "v {CFBundleShortVersionString}", read from the bundle at runtime
+- Card with rows: **Built by** (badc0ffe), **Contact** (info@badc0ffe.net), **GitHub** (tappable `Link` to `https://github.com/xbadc0ffe/pull-state`, accent-colored + underlined), **Temperature** (Celsius / Fahrenheit switch — see §11.1), **Appearance** (System / Light / Dark switch), **Recipe Suggestions** (toggle for the post-save prompts, §3.1)
+- **Tip jar** and **Restore Purchases** — see §10
 - Footer copy block on `surfaceAlt` background
 
 ### 3.6 Onboarding
@@ -242,8 +242,9 @@ Computed/exposed:
 - `processDisplay: String` — uses `processOther` when process is `.other`
 - `recipe: Recipe` — JSON-decoded; **falls back to an empty `Recipe()` (all-nil)** when `recipeData` is nil or fails to decode. Setter encodes.
 - `tastingTags: [TastingTag]` — get/set wrapper over `tastingTagsRaw`. Read uses `compactMap(TastingTag.init(rawValue:))` so unrecognized raw values are silently dropped, matching the existing `Shot.tags` pattern. Stores the bag's claimed flavor profile (label expectations) — independent from `Shot.tagsRaw`, never surfaced outside the Beans tab.
-- `ratingTrend: [BeanRatingPoint]` — shots sorted by date, mapped to (date, rating) for the sparkline
-- `averageRating: Double?` — nil when no shots
+- `ratedShots: [Shot]` — shots with `rating > 0`; 0 means "unrated"
+- `ratingTrend: [BeanRatingPoint]` — rated shots sorted by date, mapped to (date, rating) for the chart
+- `averageRating: Double?` — mean over rated shots; nil when none are rated
 
 Delete rule: `.cascade` on `shots` — deleting a bean removes all its shots. This is what the Bean detail's delete confirmation describes to the user.
 
@@ -259,7 +260,8 @@ final class Shot {
     var dose: Double
     var yield: Double
     var waterTemp: Double
-    var pressure: Double
+    var pressure: Double             // pull pressure, bar
+    var preInfPressure: Double = 0.0 // bar, inline default for migration
     var preInfusion: Double          // seconds
     var pull: Double                 // seconds
     var extractionRaw: String?       // Extraction.rawValue
@@ -276,7 +278,7 @@ final class Shot {
 ```
 
 Computed:
-- `hasPhoto: Bool`, `extraction: Extraction?`, `tags: [TastingTag]`, `ratio: Double` (yield / dose)
+- `extraction: Extraction?`, `tags: [TastingTag]`, `ratio: Double` (yield / dose, 0 when dose is 0)
 
 `@Attribute(.externalStorage)` keeps photo blobs out of the main SQLite file, so the DB stays small even with many photos.
 
@@ -323,7 +325,7 @@ final class AppSettings {
     var hasCompletedOnboarding: Bool
     var hasTipped: Bool                             // set after IAP success
     var nextBagNumber: Int                          // monotonic, never decremented
-    var seedDataInstalled: Bool                     // currently always true after first install
+    var autoRecipePromptEnabled: Bool = true        // post-save "Save/Adjust recipe?" prompts
 }
 ```
 
@@ -359,7 +361,7 @@ struct Recipe {
 - The "Save recipe?" / "Adjust recipe?" alerts (§3.1) and `RecipeSheet` (§3.7) treat nil as "not specified" — Save fires when *any* of dose/yield/temp/pullPressure is nil and only fills nil fields; Adjust fires when the recipe is complete, the rating qualifies, and a value differs (dose/yield use ±10% tolerance, timer fields use the green window).
 - Timer green-target windows and the green-bar/button visual (§6) render only when `recipe.preInfTime` / `recipe.pullTime` are non-nil.
 
-The bean's full recipe is shown and editable on the Bean detail card (`RecipeBlock`) and in the Log screen's `RecipeSheet`. Both surface the same set of rows in the same order — Grind, Dose, Yield, Water Temp, Pre-Infuse Time, Pre-Infuse Pressure, Pull Time, Pull Pressure.
+The bean's full recipe is shown and editable on the Bean detail card (`RecipeBlock`) and in the Log screen's `RecipeSheet`. Both compose the same row views from `Views/Beans/RecipeRows.swift` — Grind, Dose, Yield, Water Temp, Pre-Infusion Time, Pre-Infusion Pressure, Pull Time, Pull Pressure — so they cannot drift.
 
 ### 4.6 Enums
 
@@ -398,7 +400,7 @@ Active palette is delivered via SwiftUI environment (`\.psPalette`), resolved ag
 - **Body** — `.system(.default)` for general text
 - **Mono** — `.system(.monospaced)` for numeric values, timestamps, and small caps labels
 
-Sizes are explicit `CGFloat`s rather than `.title`/`.body` so the layout matches the visual prototype, but they are still rendered through `Font.system(size:)` which respects Dynamic Type at the user's preferred scale.
+Sizes are explicit design-time points so the layout matches the visual prototype. `PSFont` scales each size with the user's Dynamic Type setting via `UIFontMetrics(forTextStyle: .body)`, capped at 1.5× so the fixed-size chrome (tab bar, 32 pt icon buttons, timer squares) stays usable at accessibility sizes. (`Font.system(size:)` alone would be a fixed size.)
 
 ### 5.3 Reusable components
 
@@ -410,11 +412,11 @@ Defined in `Views/Components/` and used everywhere:
 - `PSPill` — capsule button with neutral/sour/perfect/bitter tone palette
 - `PSStars` — interactive or read-only star rating
 - `PSPlaceholder` — diagonal-stripe Canvas (mirrors the prototype's placeholder)
-- `PSPhotoThumb` — square thumbnail that decodes `Data?` into a `UIImage` and falls back to `PSPlaceholder` when the data is missing or undecodable; used by every photo display in the app (overview rows, Source pickers, detail-view hero photos, edit cards). The image is rendered with `.scaledToFit()` so any non-square photo sits as a centered rectangle inside the square slot with transparent space around it — no overflow into adjacent text
+- `PSPhotoThumb` — square thumbnail that decodes `Data?` into a `UIImage` and falls back to `PSPlaceholder` when the data is missing or undecodable; used by every photo display in the app (overview rows, Source pickers, detail-view hero photos, edit cards). Decoding goes through `Utilities/PSThumbnailCache.swift`: off the main actor, downsampled with ImageIO to 320 px (thumbnails) or 1700 px (`hero: true`), and cached by content hash, so list rows never decode full-size JPEGs on the main thread. The image is rendered with `.scaledToFit()` so any non-square photo sits as a centered rectangle inside the square slot with transparent space around it — no overflow into adjacent text
 - `PSPhotoCropSheet` — full-screen square-crop UI shown after every photo pick or capture (see §14)
 - `PSNavBar` — top bar (small or large variant), with leading and trailing slots
 - `PSTabBar` — custom rounded chrome bar; the Beans tab uses a Canvas-drawn three-bean cluster (`BeanIcon`); the Hardware tab tries `espresso.machine` and falls back to `cup.and.saucer.fill`
-- `PSIconBtn`, `PSTextBtn`, `PSToggle`, `PSRoastBadge`, `IconChip`, `StatCard`
+- `PSIconBtn` (requires an accessibility `label`), `PSToggle` (accessibility-represented as a real `Toggle`), `PSRoastBadge`, `IconChip`, `StatCard`, `PSSection` (section label + content, used by every detail/add screen)
 - `FlowLayout` — custom `Layout` for tag clouds. `alignment: HorizontalAlignment` parameter (`.leading` default; supports `.center` and `.trailing`) is set per-callsite — the Log screen's Tasting notes use `.center`, Process pills in the Bean form use the default `.leading`. Two-pass placement: first pass groups subviews into lines by width, second pass places each line with the requested horizontal alignment.
 - `PSPageBackground` — radial-gradient warm wash, full screen
 - `PSContentColumn` — caps content to 560pt centered (iPad layout)
@@ -422,14 +424,14 @@ Defined in `Views/Components/` and used everywhere:
 - `PSEditablePhotoHeader` — the square photo header used at the top of every add/edit form (Bean add, Bean detail edit, Hardware add, Hardware detail edit, Shot detail edit). Composes `PSPhotoThumb` (or `PSPlaceholder` when no photo is set) with a bottom-right pencil button wired to `PSPhotoSourceMenu`, plus an ✕ remove button that appears alongside the pencil whenever a photo is set. Hit area is ≥ 44 pt; the pencil is visually subtle (palette surface circle + line stroke) but findable. Replaces the v1.1 `PhotoEditCard` row across the app
 - `ModeSwitch` (Appearance) and `TempUnitSwitch` (Celsius/Fahrenheit) — capsule segmented controls used by both About and Onboarding
 
-Slider note: `SliderField` (in `Views/Log/`) does its own gesture handling — a `DragGesture(minimumDistance: 0)` over the visual track maps drag x-position to a stepped, clamped value. There is no hidden `Slider` underneath; the visible thumb is the only thing that exists.
+Slider note: `SliderField` (in `Views/Log/`) does its own gesture handling — a UIKit `HorizontalDragRecognizer` hosted in a transparent `UIViewRepresentable` overlay maps drag x-position to a stepped, clamped value. There is no hidden `Slider` underneath; the visible thumb is the only thing that exists. The readout always shows the real bound value even when it lies outside the slider range (only the thumb is pinned), and the track is exposed to VoiceOver as an adjustable element.
 
 Two safety properties hold simultaneously:
 
-- **Tap-to-jump is disabled.** On the first `.onChanged` past the deferral threshold the component checks the touch's start x against the rendered thumb center (`max(9, min(trackWidth - 9, trackWidth * fraction))` — clamped to the visible thumb position even at the slider extremes). If the start lands outside `thumbHalfWidth + 12pt` (i.e. ±21 pt of the thumb center), the gesture is latched inactive and ignored for the remainder of that drag — taps far from the thumb do nothing.
-- **Vertical scroll passes through.** The drag is registered as a `simultaneousGesture`, so the parent `ScrollView` receives the same touch events. The active/inactive latch waits for at least 4 pt of movement before deciding, then engages **only when `|dx| > |dy|`** (predominantly horizontal). Vertical drags that start on a slider track therefore scroll the page normally — the Log and Shot-edit Settings cards no longer trap finger drags on the slider rows.
+- **Tap-to-jump is disabled.** Once the recognizer has seen ≥4 pt of movement it checks the touch's start x against the rendered thumb center (`max(9, min(trackWidth - 9, trackWidth * fraction))` — clamped to the visible thumb position even at the slider extremes). If the start lands outside `thumbHalfWidth + 12pt` (i.e. ±21 pt of the thumb center), the gesture is latched inactive and ignored for the remainder of that drag — taps far from the thumb do nothing.
+- **Vertical scroll passes through.** The recognizer allows simultaneous recognition with the parent `UIScrollView`'s pan, and it **fails itself** unless the first 4 pt of movement are predominantly horizontal (`|dx| > |dy|`). Vertical drags that start on a slider track therefore scroll the page normally — the Log and Shot-edit Settings cards never trap finger drags on the slider rows.
 
-The latch resets on `.onEnded`, so each fresh touch is re-evaluated.
+The recognizer resets on touch end, so each fresh touch is re-evaluated.
 
 ### 5.4 Decisions worth flagging
 
@@ -437,7 +439,8 @@ The latch resets on `.onEnded`, so each fresh touch is re-evaluated.
 - **No third-party deps.** First-party Apple frameworks only (per `CLAUDE.md`).
 - **Photos** go through `PSPhotoSourceMenu` everywhere, never `PhotosPicker` directly. The menu wraps `PhotosPicker` for the library path and a `UIImagePickerController` `UIViewControllerRepresentable` for the camera path, then routes both through `PSPhotoCropSheet` so every saved JPEG is square. Required Info.plist keys (`NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`) are set as `INFOPLIST_KEY_*` build settings on both Debug and Release configurations.
 - **No force unwraps** in shipped code; optionals are unwrapped via `if let` / `guard`.
-- **Cross-platform shims.** `HideNavBar` and `PSDecimalKeyboard` ViewModifiers gate iOS-only modifiers behind `#if os(iOS)` so the project also builds for macOS. The `HideBackButton` modifier was removed — it was unused and dangerous (calling `.navigationBarBackButtonHidden(true)` silently kills the swipe-back gesture).
+- **iOS / iPadOS only.** `SUPPORTED_PLATFORMS` is `iphoneos iphonesimulator` and the device family is iPhone + iPad; there are no macOS/visionOS conditionals in the code. `.navigationBarBackButtonHidden(true)` is never used (it silently kills the swipe-back gesture).
+- **Swift 6 language mode** with `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`; value types that must cross actors (`Recipe`, `RecipePromptValues`) are marked `nonisolated` + `Sendable`.
 
 ---
 
@@ -474,7 +477,7 @@ TimerPhase: .pre  → .pull
 
 ### Tick
 
-A `Timer.publish(every: 0.067, on: .main, in: .common).autoconnect()` (~15Hz) updates `elapsed` while running. The total readout, both track widths, and the active track's pulse all derive from this.
+A `Task` started by **START** loops at ~15 Hz (`Task.sleep(for: .milliseconds(67))`) updating `elapsed` from the wall-clock `startInstant`; it is cancelled on DONE, reset and manual entry, so the Log tab does no periodic work between shots. The total readout, both track widths, and the active track's pulse all derive from `elapsed`. Because `LogScreen` stays mounted across tab switches (§2), a running timer keeps counting while the user looks at another tab.
 
 ### Manual entry
 
@@ -529,7 +532,7 @@ Presented from the `…` icon in any tab's nav bar. Large detent over `palette.s
 Layout (top to bottom):
 
 1. App logo — `Image("badc0ffe-logo")` from the asset catalog (max 160 pt wide, `.scaledToFit()`)
-2. Title "Pull State" + version line "v 1.2 · MAY 08 2026"
+2. Title "Pull State" + version line read from `CFBundleShortVersionString`
 3. Identity card — Built by, Contact, GitHub (tappable `Link`), **Temperature** (Celsius/Fahrenheit `TempUnitSwitch`), **Appearance** (System/Light/Dark `ModeSwitch`)
 4. Tip jar (see below)
 5. Tagline footer on `surfaceAlt`
@@ -541,19 +544,17 @@ Layout (top to bottom):
 - **Price:** $2.99 (display price loaded from StoreKit when available)
 - **Title:** "Buy Me a Coffee"
 
-Implemented via **StoreKit 2**, async/await, in `Utilities/StoreManager.swift` — an `@Observable @MainActor` class that loads the product on `init()` (eager), runs the purchase, and finishes the transaction. Verification uses `Transaction.verified` and discards unverified results.
+Implemented via **StoreKit 2**, async/await, in `Utilities/StoreManager.swift` — an `@Observable @MainActor` class with **one app-wide instance** created in `Pull_StateApp` and injected with `.environment(store)`. On init it starts a `Transaction.updates` listener (so Ask-to-Buy approvals, interrupted purchases and refunds are observed and finished even when the About sheet is closed), loads the product, and derives `tipEntitled` from `Transaction.currentEntitlements`. Verification uses `Transaction.verified` and discards unverified results. A failed product load (offline, product not yet live) is not an error: the price pill is hidden, the button is disabled, and the subtitle reads "The tip jar isn't available right now."
 
 State persistence: on a verified purchase, `AppSettings.hasTipped` flips true. The button visually flips to a checkmark + "Thanks for the coffee!" + "Means the world. Now back to dialing in." It stays in this state across launches.
 
-`StoreManager.hasPriorEntitlement()` walks `Transaction.currentEntitlements` for the tip product. The About sheet's `.task` calls it on appear and re-flips `hasTipped` true if a prior purchase exists — this restores the tipped state on a fresh install or after wiping local data, without requiring a re-purchase.
+`StoreManager.hasPriorEntitlement()` walks `Transaction.currentEntitlements` for the tip product. The About sheet's `.task` calls it on appear, and the sheet also mirrors `store.tipEntitled` into `settings.hasTipped` (saving the context) whenever it flips — this restores the tipped state on a fresh install or after wiping local data, without requiring a re-purchase. **Restore Purchases** calls `AppStore.sync()` then re-reads entitlements; a cancelled sign-in is reported as cancelled, not failure.
 
 **No features are gated behind the IAP** — per the project's design rules. It's purely a tip jar.
 
 ### 10.2 Local StoreKit testing
 
-`Resources/PullState.storekit` defines the product locally so the purchase sheet works in the Simulator without setting it up in App Store Connect. To enable: edit the **Pull State** scheme → Run → Options → set **StoreKit Configuration** to `PullState.storekit`. When the live product is created in App Store Connect with the same ID, the live store takes over automatically — no code change.
-
-A reminder comment in `StoreManager.swift` calls this scheme setup out so it isn't forgotten when the file is opened cold.
+`Resources/PullState.storekit` defines the product locally so the purchase sheet works in the Simulator without setting it up in App Store Connect. The shared **Pull State** scheme references it (Run → Options → StoreKit Configuration), so it is active for every Debug run out of the box. Archives ignore it; when the live product exists in App Store Connect with the same ID, the live store takes over automatically — no code change.
 
 ---
 
@@ -639,7 +640,7 @@ A single component, `PSPhotoSourceMenu`, is used everywhere the user can attach 
 - A `.fullScreenCover` (iOS-only) hosting a `UIViewControllerRepresentable` wrapper around `UIImagePickerController(sourceType: .camera)` for the camera path
 - A second `.fullScreenCover` keyed on a `PendingCropImage` state that hosts `PSPhotoCropSheet` — every successful pick or capture is funneled through it before the JPEG reaches the bound `Data?`
 
-Camera availability is gated by `UIImagePickerController.isSourceTypeAvailable(.camera)`. When the camera is unavailable (e.g. iOS Simulator, iPad without rear camera, macOS Catalyst), the action sheet is bypassed and the picker opens directly into Photos. On macOS the camera path is compiled out via `#if canImport(UIKit)`.
+Camera availability is gated by `UIImagePickerController.isSourceTypeAvailable(.camera)`. When the camera is unavailable (e.g. iOS Simulator, iPad without rear camera), the action sheet is bypassed and the picker opens directly into Photos.
 
 `CameraImagePicker` returns the raw `UIImage` to `PSPhotoSourceMenu` rather than writing JPEG directly, so the Photos and Camera paths converge on the same crop step. The camera coordinator dispatches the callback on the next runloop tick so SwiftUI can finish dismissing the camera cover before the crop cover is presented.
 
@@ -651,7 +652,7 @@ Camera availability is gated by `UIImagePickerController.isSourceTypeAvailable(.
 - Pan + pinch gestures (`SimultaneousGesture(DragGesture, MagnificationGesture)`) on the underlying `Image`
 - A geometry model where the **base** rendered size makes the image's shorter edge equal the on-screen crop side (so `scale = 1` is the cover scale); `minScale = 1`, `maxScale = 6`
 - Drag offsets clamped per axis to `±(effective − cropSide)/2`, so the crop outline is always fully populated
-- A `Cancel` / `Done` chrome row at the top; Done crops the source image down to the outline in pixel space (orientation-normalized first via `UIGraphicsImageRenderer`) and emits the JPEG (`compressionQuality: 0.85`)
+- A `Cancel` / `Done` chrome row at the top; Done crops the source image down to the outline in pixel space (orientation-normalized first via `UIGraphicsImageRenderer`), **downscales to at most 1200 px per edge**, and emits the JPEG (`compressionQuality: 0.85`). A 12 MP capture therefore persists as a few hundred KB instead of several MB
 
 The result: every saved photo is square. Combined with `PSPhotoThumb`'s `.scaledToFit()` rendering, square-cropped photos fill their slots edge-to-edge while any legacy non-square data renders as a centered rectangle with transparent letterboxing — never overflowing the slot.
 
@@ -682,17 +683,21 @@ Three small pieces of UIKit-adjacent behavior live in `Utilities/`. Each is a de
 
 ### 15.1 Swipe-back fix (`Utilities/SwipeBackFix.swift`)
 
-`UINavigationController` retroactively conforms to `UIGestureRecognizerDelegate`, sets the `interactivePopGestureRecognizer.delegate` to `self` in `viewDidLoad`, and returns `true` from `gestureRecognizerShouldBegin` whenever the stack has more than one controller.
+`UINavigationController` retroactively conforms to `UIGestureRecognizerDelegate`, sets the `interactivePopGestureRecognizer.delegate` to `self` in `viewDidLoad` (skipping `UIImagePickerController` so system pickers are untouched), and returns `true` from `gestureRecognizerShouldBegin` only when the stack has more than one controller **and no push/pop transition is in flight** (`transitionCoordinator == nil`).
 
 Without this, hiding the toolbar with `.toolbar(.hidden, for: .navigationBar)` causes UIKit to disable the swipe-from-edge pop gesture (because the back button — its default trigger — isn't visible). Detail views hide the toolbar but **never** call `.navigationBarBackButtonHidden(true)`, which would silently break the gesture for a different reason.
 
 ### 15.2 Select-all-on-focus (`Utilities/SelectAllOnFocus.swift`)
 
-A global, idempotent `install()` (called once from `Pull_StateApp.init()`) adds two notification observers — `UITextField.textDidBeginEditingNotification` and `UITextView.textDidBeginEditingNotification` — that call `selectAll(_:)` on the field/view (only when the existing content is non-empty). The result: tapping any editable numeric or text field with prior content immediately selects all of it, so the user's first keystroke replaces the value.
+A global, idempotent `install()` (called once from `Pull_StateApp.init()`) adds one notification observer — `UITextField.textDidBeginEditingNotification` — that calls `selectAll(_:)` on the field (only when the existing content is non-empty). The result: tapping any single-line numeric or text field with prior content immediately selects all of it, so the user's first keystroke replaces the value. Multi-line `UITextView`s (the Notes editors) are deliberately excluded — selecting a whole note on focus would make the first keystroke erase it.
 
 ### 15.3 Seed data (`Utilities/SeedData.swift`)
 
 Creates the `AppSettings` singleton on first launch only. The app starts empty — no demo beans, hardware, or shots. Bag #1 is the user's first real bag.
+
+### 15.4 Store recovery (`Pull_StateApp.swift`)
+
+If the persistent `ModelContainer` cannot be opened (corruption, an impossible migration), the store files (`default.store`, `-shm`, `-wal`, and the external-storage folder) are moved into a timestamped `Unreadable-<epoch>` sibling folder and a fresh store is created; `RootView` shows a one-time "Logbook reset" alert. If even that fails the app runs in memory for the session. A crash loop on launch is never acceptable.
 
 ---
 
@@ -708,7 +713,7 @@ Pull State is local-only by design. No accounts, no backend, no network requests
 - **No ATS exceptions** — `NSAppTransportSecurity` is not set. The app makes zero network requests, so any ATS exception would be a smell.
 - **StoreKit verification** — `Utilities/StoreManager.swift` switches on `VerificationResult` for both purchase and restore; unverified transactions are explicitly discarded. Restore uses `Transaction.currentEntitlements` (not a local flag). `AppSettings.hasTipped` is a UI cache that's re-derived from `currentEntitlements` on every About-sheet appear — never the source of truth.
 - **No logging** — there are zero `print` / `NSLog` / `os.Logger` / `debugPrint` calls in the codebase. If logging is ever introduced, gate it behind `#if DEBUG` and keep user content (bean names, notes, ratings, transaction data, photo bytes, sandbox paths) out of the log entirely.
-- **Repo hygiene** — `SECURITY.md` at the repo root documents the disclosure path. `.gitignore` covers `.DS_Store`, `xcuserdata/`, `*.xcuserstate`, `DerivedData/`, `*.p8` / `*.p12` / `AuthKey_*.p8`, `*.cer`, `*.mobileprovision`. `CLAUDE.md` and `prompts/` stay gitignored.
+- **Repo hygiene** — `SECURITY.md` at the repo root documents the disclosure path. `.gitignore` covers `.DS_Store`, `xcuserdata/`, `*.xcuserstate`, `DerivedData/`, `*.p8` / `*.p12` / `AuthKey_*.p8`, `*.cer`, `*.mobileprovision`. `prompts/` and `.claude/` stay gitignored; `CLAUDE.md` is committed as the project's agent instructions.
 
 `REGISTER_APP_GROUPS = YES` is left in the build config in anticipation of the v2 Home Screen widget (§17) — without a matching `com.apple.security.application-groups` entitlement key, no app group is actually granted, so the flag is harmless until the widget lands.
 
@@ -734,7 +739,7 @@ These are deliberate omissions, not unbuilt features. The data model and archite
 
 ```
 Pull State/
-├── Pull_StateApp.swift            (@main, Application Support bootstrap, ModelContainer, SelectAllOnFocus.install())
+├── Pull_StateApp.swift            (@main, ModelContainer + store recovery, app-wide StoreManager, SelectAllOnFocus.install())
 ├── Pull State.entitlements        (data-protection class — see §16)
 ├── PrivacyInfo.xcprivacy          (no tracking, no collection — see §16)
 ├── Models/
@@ -745,24 +750,28 @@ Pull State/
 │   ├── Recipe.swift               (all-optional Codable value type, BeanRatingPoint)
 │   └── Enums.swift                (Extraction, Roast, BeanProcess, EquipmentKind, TastingTag, SortOrder)
 ├── Resources/
-│   ├── Theme.swift                (PSPalette, PSFont, PSFmt, PSShadow, \.psPalette + \.psTempUnit env keys)
+│   ├── Theme.swift                (PSPalette, PSFont [Dynamic Type scaled], PSFmt [cached formatters], PSShadow, env keys)
 │   └── PullState.storekit         (local IAP config)
 ├── Utilities/
 │   ├── SeedData.swift             (creates AppSettings singleton)
-│   ├── StoreManager.swift         (StoreKit 2 + entitlement restore)
+│   ├── StoreManager.swift         (StoreKit 2, Transaction.updates listener, entitlement restore)
+│   ├── RecipePromptEvaluator.swift (pure Save/Adjust-recipe rules + apply strategies)
+│   ├── PSThumbnailCache.swift     (off-main ImageIO downsampling + NSCache)
 │   ├── HardwareCatalog.swift      (machines + grinders for the combobox)
 │   ├── SwipeBackFix.swift         (UINavigationController gesture delegate)
-│   └── SelectAllOnFocus.swift     (global UITextField/UITextView observer)
+│   └── SelectAllOnFocus.swift     (global UITextField observer)
 └── Views/
     ├── RootView.swift             (onboarding ↔ main switch)
     ├── MainTabView.swift          (NavigationStack, NavRoute, sheets, env injection)
-    ├── Components/                (palette-aware reusable views; PSPhotoSourceMenu, PSEditablePhotoHeader, PSPhotoThumb, PSPhotoCropSheet)
+    ├── Components/                (palette-aware reusable views; PSSection, PSPhotoSourceMenu, PSEditablePhotoHeader, PSPhotoThumb, PSPhotoCropSheet)
     ├── Log/                       (LogScreen, DualTrackTimer, SliderField, PickerRow)
     ├── History/                   (HistoryScreen, ShotCard, ShotDetailView, FilterSheet, SortSheet)
-    ├── Beans/                     (BeansScreen, BeanDetailView, BeanAddForm, RecipeBlock, RecipeSheet, RatingChart)
+    ├── Beans/                     (BeansScreen, BeanDetailView, BeanAddForm, RecipeRows, RecipeBlock, RecipeSheet, RatingChart)
     ├── Hardware/                  (HardwareScreen, HardwareDetailView, HardwareAddForm)
     ├── About/                     (AboutSheet — also defines ModeSwitch + TempUnitSwitch)
     └── Onboarding/                (OnboardingFlow + 4 step views; OnbCombobox/OnbField in OnbHardwareStep)
+
+Pull StateTests/                   (Swift Testing: recipe-prompt rules, Recipe codable, temperature conversion, catalog, formatters, model helpers)
 ```
 
 Asset catalog: `Assets.xcassets/badc0ffe-logo.imageset/` (sourced from `branding/badc0ffe-logo.png`) — used by the About sheet header.

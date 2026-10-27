@@ -50,7 +50,8 @@ enum TemperatureUnit: String, Codable, CaseIterable, Identifiable {
 }
 
 /// Singleton row holding app-wide preferences: appearance, temperature unit,
-/// onboarding completion, monotonic bag counter, and tip-jar state. Created
+/// onboarding completion, monotonic bag counter, recipe-prompt toggle and
+/// tip-jar state. Created
 /// on first launch by `SeedData.installIfNeeded(context:)`.
 @Model
 final class AppSettings {
@@ -59,7 +60,6 @@ final class AppSettings {
     var hasCompletedOnboarding: Bool
     var hasTipped: Bool
     var nextBagNumber: Int
-    var seedDataInstalled: Bool
     var autoRecipePromptEnabled: Bool = true
 
     init(
@@ -68,7 +68,6 @@ final class AppSettings {
         hasCompletedOnboarding: Bool = false,
         hasTipped: Bool = false,
         nextBagNumber: Int = 1,
-        seedDataInstalled: Bool = false,
         autoRecipePromptEnabled: Bool = true
     ) {
         self.appearanceRaw = appearance.rawValue
@@ -76,7 +75,6 @@ final class AppSettings {
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.hasTipped = hasTipped
         self.nextBagNumber = nextBagNumber
-        self.seedDataInstalled = seedDataInstalled
         self.autoRecipePromptEnabled = autoRecipePromptEnabled
     }
 

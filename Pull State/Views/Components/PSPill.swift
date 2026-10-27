@@ -2,6 +2,15 @@ import SwiftUI
 
 enum PSPillTone {
     case neutral, sour, perfect, bitter
+
+    /// The tone that colours an extraction pill everywhere it appears.
+    init(_ extraction: Extraction) {
+        switch extraction {
+        case .sour:    self = .sour
+        case .perfect: self = .perfect
+        case .bitter:  self = .bitter
+        }
+    }
 }
 
 struct PSPill: View {
@@ -45,6 +54,7 @@ struct PSPill: View {
         if let action {
             Button(action: action) { inner }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(active ? .isSelected : [])
         } else {
             inner
         }

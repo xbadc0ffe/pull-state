@@ -55,10 +55,10 @@ nonisolated struct Recipe: Codable, Equatable, Sendable {
 }
 
 /// One data point on the per-bean rating trend chart — a (date, rating) pair
-/// derived from the bean's shot history. Computed on demand by `Bean.ratingTrend`.
-nonisolated struct BeanRatingPoint: Codable, Identifiable, Equatable, Sendable {
+/// derived from the bean's rated shot history. Computed on demand by
+/// `Bean.ratingTrend`; `RatingChart` iterates by index, so two shots logged
+/// at the same instant don't need distinct ids.
+nonisolated struct BeanRatingPoint: Equatable, Sendable {
     var date: Date
     var rating: Int
-
-    var id: Date { date }
 }

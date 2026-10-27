@@ -89,14 +89,20 @@ final class Bean {
         }
     }
 
+    /// Shots the user actually rated (1–5). Unrated shots (rating 0) are
+    /// excluded from the trend chart and the average so they don't read as
+    /// "zero stars".
+    var ratedShots: [Shot] { shots.filter { $0.rating > 0 } }
+
     var ratingTrend: [BeanRatingPoint] {
-        shots
+        ratedShots
             .sorted { $0.date < $1.date }
             .map { BeanRatingPoint(date: $0.date, rating: $0.rating) }
     }
 
     var averageRating: Double? {
-        guard !shots.isEmpty else { return nil }
-        return Double(shots.reduce(0) { $0 + $1.rating }) / Double(shots.count)
+        let rated = ratedShots
+        guard !rated.isEmpty else { return nil }
+        return Double(rated.reduce(0) { $0 + $1.rating }) / Double(rated.count)
     }
 }

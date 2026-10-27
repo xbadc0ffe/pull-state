@@ -41,7 +41,7 @@ struct FilterSheet: View {
                             PSPill(
                                 label: ex.rawValue,
                                 active: filterEx == ex,
-                                tone: tone(for: ex),
+                                tone: PSPillTone(ex),
                                 horizontalPadding: 8,
                                 verticalPadding: 9,
                                 fontSize: 12,
@@ -188,10 +188,6 @@ struct FilterSheet: View {
             }
             .scrollIndicators(.hidden)
         }
-    }
-
-    private func tone(for ex: Extraction) -> PSPillTone {
-        switch ex { case .sour: return .sour; case .perfect: return .perfect; case .bitter: return .bitter }
     }
 }
 

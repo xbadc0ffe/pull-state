@@ -1,8 +1,5 @@
 import SwiftUI
 import SwiftData
-#if canImport(UIKit)
-import UIKit
-#endif
 
 /// Hardware detail screen — read mode shows photo, name, brand, live shot
 /// count, and date added. Edit mode allows name / brand / photo changes.
@@ -12,7 +9,6 @@ struct HardwareDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.psPalette) private var palette
-    @Environment(\.colorScheme) private var scheme
 
     @Query private var equipment: [Equipment]
     private var item: Equipment? { equipment.first }
@@ -35,7 +31,7 @@ struct HardwareDetailView: View {
             PSPageBackground()
             VStack(spacing: 0) {
                 PSNavBar(title: editing ? "Edit \(item?.kind.singular.lowercased() ?? "item")" : (item?.kind.singular ?? "Hardware")) {
-                    PSIconBtn(systemName: "chevron.left", action: { dismiss() })
+                    PSIconBtn(systemName: "chevron.left", label: "Back", action: { dismiss() })
                 } trailing: {
                     if let item {
                         if editing {
@@ -77,7 +73,6 @@ struct HardwareDetailView: View {
                 }
             }
         }
-        .environment(\.psPalette, PSPalette.resolve(for: scheme))
         .alert("Delete \(item?.name ?? "this item")?", isPresented: $showDeleteConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
@@ -116,7 +111,7 @@ struct HardwareDetailView: View {
         if editing {
             PSEditablePhotoHeader(data: $dPhotoData, label: item.kind.singular.uppercased())
         } else {
-            PSPhotoThumb(data: item.photoData, label: item.kind.singular.uppercased(), radius: 14)
+            PSPhotoThumb(data: item.photoData, label: item.kind.singular.uppercased(), radius: 14, hero: true)
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
         }
@@ -132,7 +127,7 @@ struct HardwareDetailView: View {
             .font(PSFont.body(13))
             .foregroundStyle(palette.inkSoft)
 
-        section("Stats") {
+        PSSection("Stats") {
             PSCard {
                 VStack(spacing: 0) {
                     PSField(label: "Shots pulled") {
@@ -166,7 +161,7 @@ struct HardwareDetailView: View {
 
     @ViewBuilder
     private func editFields(for item: Equipment) -> some View {
-        section("Identity") {
+        PSSection("Identity") {
             PSCard {
                 VStack(spacing: 0) {
                     PSField(label: "Name") {
@@ -177,14 +172,6 @@ struct HardwareDetailView: View {
                     }
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private func section<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PSSectionLabel(label).padding(.leading, 4)
-            content()
         }
     }
 

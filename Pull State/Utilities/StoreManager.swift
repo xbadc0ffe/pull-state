@@ -1,47 +1,62 @@
 import Foundation
 import StoreKit
 
-// Local development reminder: in Xcode, set
-// Run → Options → StoreKit Configuration → PullState.storekit
-// so the tip product loads from Resources/PullState.storekit
-// without needing a live App Store Connect entry.
-
-/// StoreKit 2 wrapper for the single non-consumable "Buy Me a Coffee" tip. Loads
-/// the product eagerly on init, runs verified purchases via async/await, and
-/// exposes `hasPriorEntitlement()` so the About sheet can restore the tipped
-/// state on a fresh install without forcing a re-purchase. No app feature is
-/// gated behind this product.
+/// StoreKit 2 wrapper for the single non-consumable "Buy Me a Coffee" tip.
+/// One instance lives for the whole app (created in `Pull_StateApp`, injected
+/// via `.environment`). It:
+///   • listens to `Transaction.updates` from launch, so purchases that resolve
+///     outside the purchase call (Ask to Buy, interrupted purchases, refunds)
+///     are observed and finished;
+///   • re-derives `tipEntitled` from `Transaction.currentEntitlements` at
+///     launch and on restore — `AppSettings.hasTipped` is only a UI cache of it;
+///   • loads the product lazily and treats a load failure (offline, product
+///     not yet live) as "price unavailable", not as an error to display.
+/// No app feature is gated behind this product.
+///
+/// Local testing: select `Resources/PullState.storekit` under the scheme's
+/// Run → Options → StoreKit Configuration (already saved in the shared scheme).
 @Observable
 @MainActor
 final class StoreManager {
     static let tipProductID = "com.badc0ffe.pullstate.tip"
 
-    var product: Product?
-    var purchaseInFlight = false
-    var purchaseError: String?
-    var restoreInFlight = false
+    private(set) var product: Product?
+    private(set) var purchaseInFlight = false
+    private(set) var restoreInFlight = false
+    /// Set only by a failed purchase attempt; cleared on the next attempt.
+    private(set) var purchaseError: String?
+    /// True when a verified, unrevoked tip transaction exists.
+    private(set) var tipEntitled = false
 
     enum RestoreOutcome {
         case restored, nothingToRestore, cancelled, failed
     }
 
+    private var updatesTask: Task<Void, Never>?
+
     init() {
-        Task { await loadProductIfNeeded() }
+        updatesTask = Task { [weak self] in
+            for await result in Transaction.updates {
+                guard let self else { return }
+                await self.handle(result)
+            }
+        }
+        Task {
+            await loadProductIfNeeded()
+            tipEntitled = await hasPriorEntitlement()
+        }
     }
 
     func loadProductIfNeeded() async {
         guard product == nil else { return }
-        do {
-            let products = try await Product.products(for: [Self.tipProductID])
-            product = products.first
-        } catch {
-            purchaseError = "Couldn't load tip product."
-        }
+        product = try? await Product.products(for: [Self.tipProductID]).first
     }
 
     func hasPriorEntitlement() async -> Bool {
         for await result in Transaction.currentEntitlements {
-            if case .verified(let txn) = result, txn.productID == Self.tipProductID {
+            if case .verified(let txn) = result,
+               txn.productID == Self.tipProductID,
+               txn.revocationDate == nil {
                 return true
             }
         }
@@ -60,11 +75,19 @@ final class StoreManager {
         } catch {
             return .failed
         }
-        return await hasPriorEntitlement() ? .restored : .nothingToRestore
+        tipEntitled = await hasPriorEntitlement()
+        return tipEntitled ? .restored : .nothingToRestore
     }
 
+    /// Runs the purchase flow. Returns true only for a verified, finished
+    /// transaction; `.pending` resolves later through `Transaction.updates`.
     func purchase() async -> Bool {
-        guard let product else { return false }
+        purchaseError = nil
+        await loadProductIfNeeded()
+        guard let product else {
+            purchaseError = "The tip jar isn't available right now."
+            return false
+        }
         purchaseInFlight = true
         defer { purchaseInFlight = false }
         do {
@@ -74,14 +97,13 @@ final class StoreManager {
                 switch verification {
                 case .verified(let transaction):
                     await transaction.finish()
+                    tipEntitled = true
                     return true
                 case .unverified:
                     purchaseError = "Couldn't verify the purchase."
                     return false
                 }
-            case .userCancelled:
-                return false
-            case .pending:
+            case .userCancelled, .pending:
                 return false
             @unknown default:
                 return false
@@ -92,7 +114,16 @@ final class StoreManager {
         }
     }
 
-    var displayPrice: String {
-        product?.displayPrice ?? "$2.99"
+    /// Localized price from the store, or nil when the product hasn't loaded.
+    var displayPrice: String? {
+        product?.displayPrice
+    }
+
+    private func handle(_ result: VerificationResult<Transaction>) async {
+        guard case .verified(let txn) = result else { return }
+        if txn.productID == Self.tipProductID {
+            tipEntitled = txn.revocationDate == nil
+        }
+        await txn.finish()
     }
 }

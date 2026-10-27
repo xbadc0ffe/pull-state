@@ -5,9 +5,16 @@ import SwiftData
 /// every modal sheet (About, Add Bean, Add Hardware). Pushes `\.psPalette`
 /// and `\.psTempUnit` into the environment for the whole tree, including
 /// every sheet (sheets do not inherit environment automatically).
+///
+/// All four tab screens stay mounted for the life of the shell and are shown
+/// or hidden with opacity. A `switch` would destroy the inactive screen and
+/// with it every `@State` it owns — on the Log tab that means a running timer
+/// and a half-written shot. Keeping them alive costs four live `@Query`s,
+/// which is negligible at this app's data size.
 struct MainTabView: View {
     @Bindable var settings: AppSettings
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     @State private var selected: PSTab = .log
     @State private var navPath = NavigationPath()
@@ -15,7 +22,7 @@ struct MainTabView: View {
     @State private var showAddBean: Bool = false
     @State private var addHardwareKind: EquipmentKind? = nil
 
-    private var palette: PSPalette { PSPalette.resolve(for: scheme) }
+    private var palette: PSPalette { PSPalette.resolve(for: scheme, typeSize: typeSize) }
 
     var body: some View {
         NavigationStack(path: $navPath) {
@@ -23,18 +30,20 @@ struct MainTabView: View {
                 PSPageBackground()
 
                 VStack(spacing: 0) {
-                    Group {
-                        switch selected {
-                        case .log:
+                    ZStack {
+                        pane(.log) {
                             LogScreen(onShowAbout: { showAbout = true })
-                        case .history:
+                        }
+                        pane(.history) {
                             HistoryScreen(onShowAbout: { showAbout = true })
-                        case .beans:
+                        }
+                        pane(.beans) {
                             BeansScreen(
                                 onAdd: { showAddBean = true },
                                 onShowAbout: { showAbout = true }
                             )
-                        case .hardware:
+                        }
+                        pane(.hardware) {
                             HardwareScreen(
                                 onAdd: { kind in addHardwareKind = kind },
                                 onShowAbout: { showAbout = true }
@@ -48,19 +57,19 @@ struct MainTabView: View {
                 }
             }
             .navigationDestination(for: NavRoute.self) { route in
-                switch route {
-                case .shot(let id):
-                    ShotDetailView(shotID: id)
-                        .modifier(HideNavBar())
-                case .bean(let id):
-                    BeanDetailView(beanID: id)
-                        .modifier(HideNavBar())
-                case .hardware(let id):
-                    HardwareDetailView(hardwareID: id)
-                        .modifier(HideNavBar())
+                Group {
+                    switch route {
+                    case .shot(let id):
+                        ShotDetailView(shotID: id)
+                    case .bean(let id):
+                        BeanDetailView(beanID: id)
+                    case .hardware(let id):
+                        HardwareDetailView(hardwareID: id)
+                    }
                 }
+                .toolbar(.hidden, for: .navigationBar)
             }
-            .modifier(HideNavBar())
+            .toolbar(.hidden, for: .navigationBar)
         }
         .environment(\.psPalette, palette)
         .environment(\.psTempUnit, settings.temperatureUnit)
@@ -85,6 +94,19 @@ struct MainTabView: View {
                 .presentationBackground(palette.page)
         }
     }
+
+    /// One always-mounted tab surface. Inactive panes are invisible, ignore
+    /// touches, and are hidden from VoiceOver so only the selected tab reads.
+    @ViewBuilder
+    private func pane<Content: View>(_ tab: PSTab, @ViewBuilder content: () -> Content) -> some View {
+        let active = selected == tab
+        content()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .opacity(active ? 1 : 0)
+            .allowsHitTesting(active)
+            .accessibilityHidden(!active)
+            .zIndex(active ? 1 : 0)
+    }
 }
 
 /// Destinations pushable on the shared `NavigationStack`. Each case carries the
@@ -93,18 +115,4 @@ enum NavRoute: Hashable {
     case shot(PersistentIdentifier)
     case bean(PersistentIdentifier)
     case hardware(PersistentIdentifier)
-}
-
-/// Cross-platform shim: hides the system navigation bar on iOS so detail views
-/// can render their own `PSNavBar`, and is a no-op on macOS where the modifier
-/// does not exist. The interactive swipe-back gesture is preserved by
-/// `Utilities/SwipeBackFix.swift`.
-struct HideNavBar: ViewModifier {
-    func body(content: Content) -> some View {
-        #if os(iOS)
-        content.toolbar(.hidden, for: .navigationBar)
-        #else
-        content
-        #endif
-    }
 }

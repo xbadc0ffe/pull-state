@@ -14,6 +14,29 @@ struct PSSectionLabel: View {
     }
 }
 
+/// A `PSSectionLabel` over its content, with the 4 pt label inset and 8 pt
+/// gap every screen uses. `topPad` adds breathing room above the label for
+/// stacked sections on detail screens.
+struct PSSection<Content: View>: View {
+    let label: String
+    var topPad: CGFloat = 0
+    @ViewBuilder var content: () -> Content
+
+    init(_ label: String, topPad: CGFloat = 0, @ViewBuilder content: @escaping () -> Content) {
+        self.label = label
+        self.topPad = topPad
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            PSSectionLabel(label).padding(.leading, 4)
+            content()
+        }
+        .padding(.top, topPad)
+    }
+}
+
 struct PSDisplay: View {
     let text: String
     var size: CGFloat = 28

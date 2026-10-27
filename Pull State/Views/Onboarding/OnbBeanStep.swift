@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnbBeanStep: View {
     @Binding var bean: OnbBeanEntry
+    let bagNumber: Int
     @Environment(\.psPalette) private var palette
 
     var body: some View {
@@ -28,7 +29,7 @@ struct OnbBeanStep: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("BAG #001")
+                    Text(String(format: "BAG #%03d", bagNumber))
                         .font(PSFont.mono(10, weight: .bold))
                         .tracking(1)
                         .foregroundStyle(palette.accentDeep)

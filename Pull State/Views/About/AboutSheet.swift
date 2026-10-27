@@ -1,16 +1,18 @@
 import SwiftUI
+import SwiftData
 
 /// About sheet presented from any tab's "…" icon. Houses the identity card
 /// (Built by / Contact / GitHub / Temperature / Appearance switches), the
-/// non-consumable tip-jar IAP, and a footer tagline. On appear it queries
-/// `StoreManager.hasPriorEntitlement()` so a re-installed user keeps the
-/// "tipped" state without re-purchasing.
+/// non-consumable tip-jar IAP, and a footer tagline. The app-wide
+/// `StoreManager` (from the environment) owns the StoreKit state; this sheet
+/// mirrors its `tipEntitled` into `AppSettings.hasTipped`, so a re-installed
+/// user keeps the "tipped" state without re-purchasing.
 struct AboutSheet: View {
     @Bindable var settings: AppSettings
     @Environment(\.psPalette) private var palette
     @Environment(\.dismiss) private var dismiss
-    @State private var store = StoreManager()
-    @State private var purchaseSucceeded = false
+    @Environment(\.modelContext) private var context
+    @Environment(StoreManager.self) private var store
     @State private var restoreMessage: String?
     @State private var restoreFailed = false
 
@@ -101,11 +103,8 @@ struct AboutSheet: View {
                 // Tip jar
                 Button {
                     Task {
-                        await store.loadProductIfNeeded()
-                        let ok = await store.purchase()
-                        if ok {
-                            settings.hasTipped = true
-                            purchaseSucceeded = true
+                        if await store.purchase() {
+                            markTipped()
                         }
                     }
                 } label: {
@@ -131,14 +130,14 @@ struct AboutSheet: View {
                             Text(settings.hasTipped ? "Thanks for the coffee!" : "Buy me a coffee!")
                                 .font(PSFont.body(14.5, weight: .bold))
                                 .foregroundStyle(palette.ink)
-                            Text(settings.hasTipped ? "Means the world. Now back to dialing in." : "Support development with a one-time tip.")
+                            Text(tipSubtitle)
                                 .font(PSFont.body(12))
                                 .foregroundStyle(palette.inkSoft)
                                 .multilineTextAlignment(.leading)
                         }
                         Spacer(minLength: 0)
-                        if !settings.hasTipped {
-                            Text(store.displayPrice)
+                        if !settings.hasTipped, let price = store.displayPrice {
+                            Text(price)
                                 .font(PSFont.mono(13, weight: .bold))
                                 .tracking(0.3)
                                 .foregroundStyle(.white)
@@ -158,7 +157,7 @@ struct AboutSheet: View {
                     .psShadow(strong: !settings.hasTipped)
                 }
                 .buttonStyle(.plain)
-                .disabled(settings.hasTipped || store.purchaseInFlight)
+                .disabled(settings.hasTipped || store.purchaseInFlight || store.product == nil)
                 .padding(.horizontal, 18)
                 .padding(.top, 18)
 
@@ -168,7 +167,7 @@ struct AboutSheet: View {
                         restoreMessage = nil
                         switch await store.restore() {
                         case .restored:
-                            settings.hasTipped = true
+                            markTipped()
                             restoreFailed = false
                             restoreMessage = "Purchase restored. Thanks for the coffee!"
                         case .nothingToRestore:
@@ -233,9 +232,24 @@ struct AboutSheet: View {
         .task {
             await store.loadProductIfNeeded()
             if !settings.hasTipped, await store.hasPriorEntitlement() {
-                settings.hasTipped = true
+                markTipped()
             }
         }
+        .onChange(of: store.tipEntitled) { _, entitled in
+            if entitled { markTipped() }
+        }
+    }
+
+    private var tipSubtitle: String {
+        if settings.hasTipped { return "Means the world. Now back to dialing in." }
+        if store.product == nil { return "The tip jar isn't available right now." }
+        return "Support development with a one-time tip."
+    }
+
+    private func markTipped() {
+        guard !settings.hasTipped else { return }
+        settings.hasTipped = true
+        try? context.save()
     }
 }
 

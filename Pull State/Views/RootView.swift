@@ -6,8 +6,11 @@ import SwiftData
 /// chosen `preferredColorScheme`. Triggers `SeedData.installIfNeeded` on
 /// appear so the singleton settings row exists.
 struct RootView: View {
+    var recoveredFromCorruptStore: Bool = false
+
     @Environment(\.modelContext) private var context
     @Query private var settingsQuery: [AppSettings]
+    @State private var showRecoveryNotice = false
 
     private var settings: AppSettings? { settingsQuery.first }
 
@@ -26,6 +29,12 @@ struct RootView: View {
         .preferredColorScheme(colorScheme)
         .task {
             SeedData.installIfNeeded(context: context)
+            showRecoveryNotice = recoveredFromCorruptStore
+        }
+        .alert("Logbook reset", isPresented: $showRecoveryNotice) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Pull State couldn't open its saved data, so it started fresh. The unreadable files were kept in the app's Application Support folder.")
         }
     }
 

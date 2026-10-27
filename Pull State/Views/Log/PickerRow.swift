@@ -106,9 +106,7 @@ struct PickerRow: View {
                 .background(palette.surfaceAlt)
             }
 
-            if !last && !open {
-                Rectangle().fill(palette.line).frame(height: 0.5)
-            } else if !last && open {
+            if !last {
                 Rectangle().fill(palette.line).frame(height: 0.5)
             }
         }

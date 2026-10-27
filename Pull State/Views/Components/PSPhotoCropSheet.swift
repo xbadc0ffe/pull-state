@@ -1,5 +1,4 @@
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
 
 /// Square crop sheet shown after the user picks or captures a photo. The user
@@ -11,6 +10,10 @@ import UIKit
 /// dimension and overflowing in the other. `minScale = 1`; users can zoom up
 /// to `maxScale = 6`. Drag offsets are clamped so the outline never escapes
 /// the image — keeping the crop fully populated.
+///
+/// The committed JPEG is downscaled to `maxOutputEdge` pixels: a 12 MP capture
+/// would otherwise persist as a 3000×3000 px blob that every thumbnail has to
+/// decode. 1200 px is ample for the 560 pt hero slot at 2×.
 struct PSPhotoCropSheet: View {
     let sourceImage: UIImage
     let onCommit: (Data) -> Void
@@ -25,6 +28,7 @@ struct PSPhotoCropSheet: View {
     @GestureState private var drag: CGSize = .zero
 
     private let maxScale: CGFloat = 6
+    static let maxOutputEdge: CGFloat = 1200
 
     var body: some View {
         GeometryReader { geo in
@@ -194,8 +198,16 @@ struct PSPhotoCropSheet: View {
               let cropped = cg.cropping(to: pxRect.intersection(CGRect(x: 0, y: 0, width: cg.width, height: cg.height)))
         else { return nil }
 
-        let cropUI = UIImage(cgImage: cropped, scale: pixelScale, orientation: .up)
-        return cropUI.jpegData(compressionQuality: 0.85)
+        let cropUI = UIImage(cgImage: cropped, scale: 1, orientation: .up)
+        let edge = CGFloat(cropped.width)
+        let output: UIImage
+        if edge > Self.maxOutputEdge,
+           let small = cropUI.preparingThumbnail(of: CGSize(width: Self.maxOutputEdge, height: Self.maxOutputEdge)) {
+            output = small
+        } else {
+            output = cropUI
+        }
+        return output.jpegData(compressionQuality: 0.85)
     }
 
     private func upOriented(_ img: UIImage) -> UIImage {
@@ -208,4 +220,3 @@ struct PSPhotoCropSheet: View {
         }
     }
 }
-#endif

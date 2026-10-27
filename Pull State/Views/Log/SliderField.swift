@@ -1,15 +1,21 @@
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#endif
 
 /// Stepped slider with an inline editable readout. There is no hidden `Slider`
 /// — the visible thumb is the only thing that exists, and a UIKit-backed pan
-/// recognizer (via `HorizontalDragView` on iOS / iPadOS / visionOS) maps drag
-/// x-position to a stepped, clamped value. The recognizer fails on
-/// vertical-first drags so the parent `ScrollView` receives them. Tap on the
-/// readout flips the row into a focused decimal text field that commits on
-/// submit/blur. See DESIGN.md §5.3 for the gesture spec.
+/// recognizer (`HorizontalDragView`) maps drag x-position to a stepped,
+/// clamped value. The recognizer fails on vertical-first drags so the parent
+/// `ScrollView` receives them. Tap on the readout flips the row into a
+/// focused decimal text field that commits on submit/blur. See DESIGN.md §5.3
+/// for the gesture spec.
+///
+/// The readout always shows the *actual* bound value, even when it lies
+/// outside `range` (a 75 s pull edited on a 0–120 s slider, a recipe
+/// temperature typed outside the slider span); only the thumb is pinned to
+/// the track's end. Dragging or typing then clamps into range.
+///
+/// VoiceOver: the track is one adjustable element (swipe up/down steps the
+/// value); the readout button remains a separate "edit" action.
 struct SliderField: View {
     let label: String
     @Binding var value: Double
@@ -22,7 +28,6 @@ struct SliderField: View {
     @Environment(\.psPalette) private var palette
     @State private var editing = false
     @State private var draft: String = ""
-    @State private var dragActive: Bool? = nil
     @FocusState private var focused: Bool
 
     private var clampedValue: Double {
@@ -43,7 +48,7 @@ struct SliderField: View {
                 if editing {
                     HStack(spacing: 4) {
                         TextField("", text: $draft)
-                            .modifier(PSDecimalKeyboard(active: true))
+                            .keyboardType(.decimalPad)
                             .font(PSFont.mono(17, weight: .bold))
                             .foregroundStyle(palette.ink)
                             .multilineTextAlignment(.trailing)
@@ -54,6 +59,7 @@ struct SliderField: View {
                             .background(palette.accentSoft)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                             .onSubmit { commit() }
+                            .accessibilityLabel(label)
                         Text(unit)
                             .font(PSFont.mono(11))
                             .foregroundStyle(palette.inkMuted)
@@ -89,6 +95,8 @@ struct SliderField: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Edit \(label)")
+                    .accessibilityValue("\(formatted) \(unit)")
                 }
             }
 
@@ -113,7 +121,6 @@ struct SliderField: View {
                 }
                 .frame(height: 22)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                #if canImport(UIKit)
                 // UIKit-backed pan recognizer. Decides at the first ≥4pt of
                 // movement: predominantly horizontal AND starting within
                 // ±21pt of the thumb center activates the drag; everything
@@ -135,37 +142,18 @@ struct SliderField: View {
                         onChanged: { x in update(from: x, width: trackWidth) }
                     )
                 )
-                #else
-                // macOS fallback (no UIKit). Scroll passthrough isn't an
-                // issue with trackpad scroll semantics, so a plain SwiftUI
-                // DragGesture with the same 4pt latch + direction/tolerance
-                // gating is sufficient.
-                .contentShape(Rectangle())
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 4)
-                        .onChanged { g in
-                            if dragActive == nil {
-                                let dx = abs(g.translation.width)
-                                let dy = abs(g.translation.height)
-                                let halfThumb: CGFloat = 9
-                                let forgiveness: CGFloat = 12
-                                let unclampedCenter = trackWidth * fraction
-                                let thumbCenter = max(halfThumb, min(trackWidth - halfThumb, unclampedCenter))
-                                let tolerance = halfThumb + forgiveness
-                                let inTolerance = abs(g.startLocation.x - thumbCenter) <= tolerance
-                                dragActive = inTolerance && dx > dy
-                            }
-                            if dragActive == true {
-                                update(from: g.location.x, width: trackWidth)
-                            }
-                        }
-                        .onEnded { _ in
-                            dragActive = nil
-                        }
-                )
-                #endif
             }
             .frame(height: 22)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(label)
+            .accessibilityValue("\(formatted) \(unit)")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: value = min(range.upperBound, clampedValue + step)
+                case .decrement: value = max(range.lowerBound, clampedValue - step)
+                @unknown default: break
+                }
+            }
         }
         .padding(.vertical, 12)
         .overlay(
@@ -177,7 +165,7 @@ struct SliderField: View {
     }
 
     private var formatted: String {
-        String(format: "%.*f", decimals, clampedValue)
+        String(format: "%.*f", decimals, value)
     }
 
     private func update(from x: CGFloat, width: CGFloat) {
@@ -194,12 +182,10 @@ struct SliderField: View {
     private func commit() {
         defer { editing = false }
         let trimmed = draft.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, let n = Double(trimmed) else { return }
+        guard !trimmed.isEmpty, let n = Double(trimmed.replacingOccurrences(of: ",", with: ".")) else { return }
         value = min(max(n, range.lowerBound), range.upperBound)
     }
 }
-
-#if canImport(UIKit)
 
 /// Transparent UIView overlay that hosts a `HorizontalDragRecognizer`. The
 /// view fills its SwiftUI overlay frame, receives touches, and forwards them
@@ -336,5 +322,3 @@ private final class HorizontalDragRecognizer: UIGestureRecognizer {
         decided = false
     }
 }
-
-#endif

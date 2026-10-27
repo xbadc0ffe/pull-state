@@ -4,7 +4,7 @@ A local-only espresso shot logbook for iPhone and iPad — for home baristas who
 
 ## Screenshots
 
-<p align="center"><em>Screenshots coming soon.</em></p>
+App Store screenshots for iPhone and iPad live in [`branding/`](branding/).
 
 ## Features
 
@@ -19,8 +19,8 @@ A local-only espresso shot logbook for iPhone and iPad — for home baristas who
 
 ## Requirements
 
-- iOS 26.4+ / iPadOS 26.4+
-- Xcode 26+
+- iOS 26.0+ / iPadOS 26.0+
+- Xcode 27+ (Swift 6 language mode)
 - No third-party dependencies
 
 ## Building
@@ -30,7 +30,13 @@ A local-only espresso shot logbook for iPhone and iPad — for home baristas who
 3. Select an iOS or iPadOS simulator (or a connected device with provisioning configured).
 4. Build and run with ⌘R.
 
-The local `Pull State/Resources/PullState.storekit` configuration file is wired into the scheme automatically in Debug builds, so the tip-jar purchase sheet works in the Simulator without any App Store Connect setup. To verify, open the **Pull State** scheme → Run → Options and confirm `PullState.storekit` is selected as the StoreKit Configuration.
+The shared **Pull State** scheme references `Pull State/Resources/PullState.storekit` as its StoreKit Configuration, so the tip-jar purchase sheet works in the Simulator without any App Store Connect setup.
+
+Unit tests (Swift Testing) live in `Pull StateTests` and run with ⌘U or:
+
+```
+xcodebuild test -scheme "Pull State" -destination 'platform=iOS Simulator,name=iPhone 17'
+```
 
 ## Architecture
 
@@ -38,7 +44,7 @@ Pull State is a SwiftUI app backed by SwiftData, with no third-party dependencie
 
 The UI is structured around a single `NavigationStack` and four launch-time tabs — **Log**, **History**, **Beans**, **Hardware** — wrapped by a custom design system (`PSPalette`, `PSFont`, and the reusable components in `Views/Components/`). Detail screens push onto the same stack via a `NavRoute` enum and render their own navigation chrome. Sheets handle add-bean / add-hardware / about / recipe / filter / sort flows.
 
-For the full file map, the SwiftData schema, screen specifications, timer behaviour, IAP wiring, and the deferred V2 list, see [docs/DESIGN.md](docs/DESIGN.md).
+For the full file map, the SwiftData schema, screen specifications, timer behaviour, IAP wiring, and the deferred V2 list, see [docs/DESIGN.md](docs/DESIGN.md). [docs/WIKI.md](docs/WIKI.md) covers repo layout, conventions and the build/ship flow.
 
 ## Contributing
 

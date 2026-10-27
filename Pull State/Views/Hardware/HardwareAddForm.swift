@@ -4,8 +4,8 @@ import SwiftData
 /// Full-screen Add Hardware sheet, kind-aware (machine or grinder). Name uses
 /// `OnbCombobox` driven by `HardwareCatalog`; selecting a suggestion auto-fills
 /// the Brand field, but the user can also type a fully custom model. The
-/// "Add a photo" card on this form is currently a non-interactive hint —
-/// photos are attached afterwards from the Hardware detail edit flow.
+/// photo header at the top goes through the standard `PSPhotoSourceMenu` →
+/// crop flow and is persisted as `Equipment.photoData` on save.
 struct HardwareAddForm: View {
     let kind: EquipmentKind
     let onCancel: () -> Void
@@ -13,7 +13,6 @@ struct HardwareAddForm: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.psPalette) private var palette
-    @Environment(\.colorScheme) private var scheme
 
     @State private var name = ""
     @State private var brand = ""
@@ -42,7 +41,7 @@ struct HardwareAddForm: View {
                     VStack(alignment: .leading, spacing: 14) {
                         PSEditablePhotoHeader(data: $photoData, label: kind.singular.uppercased())
 
-                        labelGroup(kind == .machine ? "Espresso Machine" : "Grinder") {
+                        PSSection(kind == .machine ? "Espresso Machine" : "Grinder") {
                             VStack(alignment: .leading, spacing: 12) {
                                 OnbCombobox(
                                     label: "Name",
@@ -74,15 +73,6 @@ struct HardwareAddForm: View {
                 }
                 .scrollIndicators(.hidden)
             }
-        }
-        .environment(\.psPalette, PSPalette.resolve(for: scheme))
-    }
-
-    @ViewBuilder
-    private func labelGroup<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PSSectionLabel(label).padding(.leading, 4)
-            content()
         }
     }
 

@@ -5,7 +5,8 @@ import SwiftData
 /// shows the bean's eight recipe rows (nil values render as "—"); edit mode
 /// binds rows to a draft `Recipe` and commits on Save. Closing while edits
 /// are dirty triggers a discard-confirmation alert. Temperature rows convert
-/// to/from Celsius at the UI boundary so storage stays canonical.
+/// to/from Celsius at the UI boundary so storage stays canonical. Rows are
+/// the shared `RecipeRows.swift` views, also used by `RecipeBlock`.
 struct RecipeSheet: View {
     @Bindable var bean: Bean
     let onClose: () -> Void
@@ -92,14 +93,14 @@ struct RecipeSheet: View {
             ScrollView {
                 PSCard {
                     VStack(spacing: 0) {
-                        RecipeStringField(label: "Grind", placeholder: "e.g. 22", value: editing ? $draft.grind : .constant(bean.recipe.grind), editing: editing)
-                        RecipeNumField(label: "Dose", unit: "g", value: editing ? $draft.dose : .constant(bean.recipe.dose), editing: editing)
-                        RecipeNumField(label: "Yield", unit: "g", value: editing ? $draft.yield : .constant(bean.recipe.yield), editing: editing)
-                        RecipeTempField(label: "Water Temp", value: editing ? $draft.temp : .constant(bean.recipe.temp), editing: editing)
-                        RecipeNumField(label: "Pre-Infusion Time", unit: "s", value: editing ? $draft.preInfTime : .constant(bean.recipe.preInfTime), editing: editing)
-                        RecipeNumField(label: "Pre-Infusion Pressure", unit: "bar", value: editing ? $draft.preInfPressure : .constant(bean.recipe.preInfPressure), editing: editing)
-                        RecipeNumField(label: "Pull Time", unit: "s", value: editing ? $draft.pullTime : .constant(bean.recipe.pullTime), editing: editing)
-                        RecipeNumField(label: "Pull Pressure", unit: "bar", value: editing ? $draft.pullPressure : .constant(bean.recipe.pullPressure), editing: editing, last: true)
+                        RecipeStringRow(label: "Grind", placeholder: "e.g. 22", value: editing ? $draft.grind : .constant(bean.recipe.grind), editing: editing)
+                        RecipeNumberRow(label: "Dose", unit: "g", value: editing ? $draft.dose : .constant(bean.recipe.dose), editing: editing)
+                        RecipeNumberRow(label: "Yield", unit: "g", value: editing ? $draft.yield : .constant(bean.recipe.yield), editing: editing)
+                        RecipeTempRow(label: "Water Temp", value: editing ? $draft.temp : .constant(bean.recipe.temp), editing: editing)
+                        RecipeNumberRow(label: "Pre-Infusion Time", unit: "s", value: editing ? $draft.preInfTime : .constant(bean.recipe.preInfTime), editing: editing)
+                        RecipeNumberRow(label: "Pre-Infusion Pressure", unit: "bar", value: editing ? $draft.preInfPressure : .constant(bean.recipe.preInfPressure), editing: editing)
+                        RecipeNumberRow(label: "Pull Time", unit: "s", value: editing ? $draft.pullTime : .constant(bean.recipe.pullTime), editing: editing)
+                        RecipeNumberRow(label: "Pull Pressure", unit: "bar", value: editing ? $draft.pullPressure : .constant(bean.recipe.pullPressure), editing: editing, last: true)
                     }
                 }
                 .padding(.horizontal, 18)
@@ -117,130 +118,6 @@ struct RecipeSheet: View {
             }
         } message: {
             Text("Your edits to this recipe will be lost.")
-        }
-    }
-}
-
-private struct RecipeStringField: View {
-    let label: String
-    let placeholder: String
-    @Binding var value: String?
-    let editing: Bool
-    @Environment(\.psPalette) private var palette
-
-    var body: some View {
-        PSField(label: label, last: false) {
-            if editing {
-                TextField(placeholder, text: Binding(
-                    get: { value ?? "" },
-                    set: { value = $0.isEmpty ? nil : $0 }
-                ))
-                .font(PSFont.mono(13.5, weight: .bold))
-                .foregroundStyle(palette.ink)
-                .multilineTextAlignment(.trailing)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .frame(width: 120)
-                .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 6))
-            } else {
-                PSValueText(text: (value?.isEmpty == false ? value : nil) ?? "—", fontSize: 13.5)
-            }
-        }
-    }
-}
-
-private struct RecipeNumField: View {
-    let label: String
-    let unit: String
-    @Binding var value: Double?
-    let editing: Bool
-    var last: Bool = false
-    @Environment(\.psPalette) private var palette
-
-    private func formatted(_ d: Double) -> String {
-        d == d.rounded() ? "\(Int(d))" : String(format: "%g", d)
-    }
-
-    var body: some View {
-        PSField(label: label, suffix: editing ? nil : (value == nil ? nil : unit), last: last) {
-            if editing {
-                HStack(spacing: 4) {
-                    TextField("—", text: Binding(
-                        get: { value.map(formatted) ?? "" },
-                        set: { newValue in
-                            let trimmed = newValue.trimmingCharacters(in: .whitespaces)
-                            if trimmed.isEmpty {
-                                value = nil
-                            } else if let n = Double(trimmed.replacingOccurrences(of: ",", with: ".")) {
-                                value = n
-                            }
-                        }
-                    ))
-                    .modifier(PSDecimalKeyboard(active: true))
-                    .font(PSFont.mono(13.5, weight: .bold))
-                    .foregroundStyle(palette.ink)
-                    .multilineTextAlignment(.trailing)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .frame(width: 80)
-                    .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 6))
-                    Text(unit)
-                        .font(PSFont.mono(11))
-                        .foregroundStyle(palette.inkMuted)
-                }
-            } else {
-                PSValueText(text: value.map(formatted) ?? "—", fontSize: 13.5)
-            }
-        }
-    }
-}
-
-private struct RecipeTempField: View {
-    let label: String
-    @Binding var value: Double?
-    let editing: Bool
-    @Environment(\.psPalette) private var palette
-    @Environment(\.psTempUnit) private var tempUnit
-
-    private func formatted(_ d: Double) -> String {
-        d == d.rounded() ? "\(Int(d))" : String(format: "%g", d)
-    }
-
-    private var displayString: String {
-        guard let c = value else { return "—" }
-        return formatted(tempUnit.display(celsius: c))
-    }
-
-    var body: some View {
-        PSField(label: label, suffix: editing ? nil : (value == nil ? nil : tempUnit.label)) {
-            if editing {
-                HStack(spacing: 4) {
-                    TextField("—", text: Binding(
-                        get: { value.map { formatted(tempUnit.display(celsius: $0)) } ?? "" },
-                        set: { newValue in
-                            let trimmed = newValue.trimmingCharacters(in: .whitespaces)
-                            if trimmed.isEmpty {
-                                value = nil
-                            } else if let n = Double(trimmed.replacingOccurrences(of: ",", with: ".")) {
-                                value = tempUnit.toCelsius(n)
-                            }
-                        }
-                    ))
-                    .modifier(PSDecimalKeyboard(active: true))
-                    .font(PSFont.mono(13.5, weight: .bold))
-                    .foregroundStyle(palette.ink)
-                    .multilineTextAlignment(.trailing)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .frame(width: 80)
-                    .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 6))
-                    Text(tempUnit.label)
-                        .font(PSFont.mono(11))
-                        .foregroundStyle(palette.inkMuted)
-                }
-            } else {
-                PSValueText(text: displayString, fontSize: 13.5)
-            }
         }
     }
 }

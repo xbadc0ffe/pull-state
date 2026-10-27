@@ -1,16 +1,15 @@
 import SwiftUI
 import SwiftData
-import Combine
-#if canImport(UIKit)
 import UIKit
-#endif
 
 /// The Log tab — primary surface for timing and saving a shot. Owns the timer
 /// state machine (idle/running/done × pre/pull), the source pickers
 /// (pre-selected from the most recently logged shot), the slider settings
 /// (preloaded from the selected bean's recipe, only filling fields whose
-/// recipe value is non-nil), and the post-save recipe prompt — see DESIGN.md
-/// §3.1 for the full save → prompt logic.
+/// recipe value is non-nil), and the post-save recipe prompt — the rules live
+/// in `RecipePromptEvaluator`; see DESIGN.md §3.1. The screen stays mounted
+/// while other tabs are shown (see `MainTabView`), so a running timer and a
+/// half-written shot survive tab switches.
 struct LogScreen: View {
     let onShowAbout: () -> Void
 
@@ -22,10 +21,6 @@ struct LogScreen: View {
     @Query(sort: \Bean.createdAt, order: .reverse) private var beans: [Bean]
     @Query private var settingsQuery: [AppSettings]
     private var settings: AppSettings? { settingsQuery.first }
-
-    // Stable per-instance tick publisher; recreating it inside body would
-    // force SwiftUI to re-subscribe on every render.
-    private let tick = Timer.publish(every: 0.067, on: .main, in: .common).autoconnect()
 
     @State private var machineID: PersistentIdentifier?
     @State private var grinderID: PersistentIdentifier?
@@ -52,6 +47,9 @@ struct LogScreen: View {
     @State private var preEnd: Double? = nil
     @State private var pullEnd: Double? = nil
     @State private var startInstant: Date? = nil
+    /// ~15 Hz readout refresh while the timer runs; nil when idle or done so
+    /// the Log tab does no periodic work between shots.
+    @State private var tickTask: Task<Void, Never>? = nil
     @State private var savedFlash: Bool = false
     @State private var showRecipeSheet: Bool = false
     @State private var recipePrompt: RecipePrompt? = nil
@@ -141,10 +139,6 @@ struct LogScreen: View {
         }
         .onChange(of: beanID) { _, _ in
             preloadFromBean()
-        }
-        .onReceive(tick) { now in
-            guard tState == .running, let startInstant else { return }
-            elapsed = now.timeIntervalSince(startInstant)
         }
         .sheet(isPresented: $showRecipeSheet) {
             if let bean = selectedBean {
@@ -396,7 +390,7 @@ struct LogScreen: View {
                 .font(PSFont.body(13, weight: .medium))
                 .foregroundStyle(palette.inkSoft)
             Spacer()
-            PSToggle(isOn: $usedPaperFilter)
+            PSToggle(isOn: $usedPaperFilter, label: "Paper Filter")
         }
         .padding(.vertical, 12)
     }
@@ -423,7 +417,7 @@ struct LogScreen: View {
                     PSPill(
                         label: ex.rawValue,
                         active: extraction == ex,
-                        tone: tone(for: ex),
+                        tone: PSPillTone(ex),
                         horizontalPadding: 8,
                         verticalPadding: 11,
                         fontSize: 13,
@@ -588,46 +582,13 @@ struct LogScreen: View {
 
     // MARK: - Actions
 
-    private func tone(for ex: Extraction) -> PSPillTone {
-        switch ex {
-        case .sour: return .sour
-        case .perfect: return .perfect
-        case .bitter: return .bitter
-        }
-    }
-
     private func evaluateRecipePrompt(bean: Bean, values: RecipePromptValues, shotRating: Int) {
         guard settings?.autoRecipePromptEnabled ?? true else { return }
-        let r = bean.recipe
-        let recipeIsIncomplete = r.dose == nil || r.yield == nil || r.temp == nil || r.pullPressure == nil
-        if recipeIsIncomplete {
-            recipePrompt = RecipePrompt(kind: .save, bean: bean, values: values)
-            return
-        }
-
         let bestRating = bean.shots.map(\.rating).max() ?? 0
-        let qualifiesByRating = shotRating >= bestRating
-
-        let valueDiffers = differsByPercent(values.dose, r.dose, percent: 0.10)
-            || differsByPercent(values.yield, r.yield, percent: 0.10)
-            || differs(values.temp, r.temp)
-            || differs(values.pressure, r.pullPressure)
-
-        let preDiffers: Bool
-        if let target = r.preInfTime, values.preInfusionUsed {
-            preDiffers = values.preInfusion < target - 1 || values.preInfusion > target + 1
-        } else {
-            preDiffers = false
-        }
-        let pullDiffers: Bool
-        if let target = r.pullTime, values.pullTimeUsed {
-            pullDiffers = values.pullTime < target - 3 || values.pullTime > target + 3
-        } else {
-            pullDiffers = false
-        }
-
-        if qualifiesByRating && (valueDiffers || preDiffers || pullDiffers) {
-            recipePrompt = RecipePrompt(kind: .adjust, bean: bean, values: values)
+        if let kind = RecipePromptEvaluator.evaluate(
+            recipe: bean.recipe, values: values, shotRating: shotRating, bestRating: bestRating
+        ) {
+            recipePrompt = RecipePrompt(kind: kind, bean: bean, values: values)
         }
     }
 
@@ -635,52 +596,16 @@ struct LogScreen: View {
         (value * 10).rounded() / 10
     }
 
-    private func differs(_ a: Double, _ b: Double?) -> Bool {
-        guard let b else { return true }
-        return abs(a - b) > 0.01
-    }
-
-    private func differsByPercent(_ a: Double, _ b: Double?, percent: Double) -> Bool {
-        guard let b else { return true }
-        let tolerance = abs(b) * percent
-        return abs(a - b) > tolerance
-    }
-
     private func applyRecipePrompt() {
         guard let prompt = recipePrompt else { return }
         switch prompt.kind {
         case .save:
-            fillNilRecipeFields(prompt.values, into: prompt.bean)
+            prompt.bean.recipe = RecipePromptEvaluator.fillingNil(prompt.bean.recipe, with: prompt.values)
         case .adjust:
-            overwriteRecipeFields(prompt.values, into: prompt.bean)
+            prompt.bean.recipe = RecipePromptEvaluator.overwriting(prompt.bean.recipe, with: prompt.values)
         }
+        try? context.save()
         recipePrompt = nil
-    }
-
-    private func fillNilRecipeFields(_ values: RecipePromptValues, into bean: Bean) {
-        var r = bean.recipe
-        if r.dose == nil { r.dose = values.dose }
-        if r.yield == nil { r.yield = values.yield }
-        if r.temp == nil { r.temp = values.temp }
-        if r.pullPressure == nil { r.pullPressure = values.pressure }
-        if r.grind == nil, values.grindUsed { r.grind = values.grind }
-        if r.preInfTime == nil, values.preInfusionUsed { r.preInfTime = values.preInfusion }
-        if r.pullTime == nil, values.pullTimeUsed { r.pullTime = values.pullTime }
-        bean.recipe = r
-        try? context.save()
-    }
-
-    private func overwriteRecipeFields(_ values: RecipePromptValues, into bean: Bean) {
-        var r = bean.recipe
-        r.dose = values.dose
-        r.yield = values.yield
-        r.temp = values.temp
-        r.pullPressure = values.pressure
-        if values.grindUsed { r.grind = values.grind }
-        if values.preInfusionUsed { r.preInfTime = values.preInfusion }
-        if values.pullTimeUsed { r.pullTime = values.pullTime }
-        bean.recipe = r
-        try? context.save()
     }
 
     private func preloadFromBean() {
@@ -701,8 +626,20 @@ struct LogScreen: View {
         preEnd = nil
         pullEnd = nil
         phase = .pre
-        startInstant = Date()
+        let start = Date()
+        startInstant = start
         tState = .running
+        tickTask?.cancel()
+        tickTask = Task {
+            while !Task.isCancelled {
+                elapsed = Date().timeIntervalSince(start)
+                try? await Task.sleep(for: .milliseconds(67))
+            }
+        }
+    }
+    private func stopTicking() {
+        tickTask?.cancel()
+        tickTask = nil
     }
     private func firstDrip() {
         guard tState == .running, phase == .pre else { return }
@@ -714,8 +651,10 @@ struct LogScreen: View {
         if preEnd == nil { preEnd = elapsed }
         pullEnd = elapsed
         tState = .done
+        stopTicking()
     }
     private func resetTimer() {
+        stopTicking()
         tState = .idle
         phase = .pre
         elapsed = 0
@@ -729,12 +668,14 @@ struct LogScreen: View {
         preEnd = s
         pullEnd = s + currentPull
         tState = .done
+        stopTicking()
     }
     private func setManualPull(_ secs: Double) {
         let s = max(0, min(secs, 999))
         if preEnd == nil { preEnd = 0 }
         pullEnd = (preEnd ?? 0) + s
         tState = .done
+        stopTicking()
     }
 
     private func save() {
@@ -810,32 +751,6 @@ enum TimerState { case idle, running, done }
 /// Active sub-track within the running timer.
 enum TimerPhase { case pre, pull }
 
-/// Snapshot of every value the recipe-prompt logic compares against the bean's
-/// saved recipe. `*Used` flags distinguish "user actually used the timer for
-/// this track" from "value defaults to 0", so `applyRecipePrompt` never
-/// overwrites an existing recipe time with a zero from an unused track.
-struct RecipePromptValues: Equatable {
-    let dose: Double
-    let yield: Double
-    let temp: Double
-    let pressure: Double
-    let preInfPressure: Double
-    let grind: String
-    let preInfusion: Double
-    let preInfusionUsed: Bool
-    let pullTime: Double
-    let pullTimeUsed: Bool
-
-    var grindUsed: Bool { !grind.isEmpty }
-}
-
-/// Which post-save alert to show. Mutually exclusive with each other and with
-/// "no prompt at all" — see DESIGN.md §3.1 for the rules.
-enum RecipePromptKind {
-    case save
-    case adjust
-}
-
 /// Post-save prompt payload: which kind of prompt to show, the bean to update,
 /// and the recipe values pulled from the just-saved shot.
 struct RecipePrompt {
@@ -846,10 +761,8 @@ struct RecipePrompt {
 
 @MainActor
 private func dismissKeyboard() {
-    #if canImport(UIKit)
     UIApplication.shared.sendAction(
         #selector(UIResponder.resignFirstResponder),
         to: nil, from: nil, for: nil
     )
-    #endif
 }

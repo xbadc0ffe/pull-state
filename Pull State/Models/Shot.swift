@@ -67,8 +67,6 @@ final class Shot {
         self.photoData = photoData
     }
 
-    var hasPhoto: Bool { photoData != nil }
-
     var extraction: Extraction? {
         get { extractionRaw.flatMap(Extraction.init(rawValue:)) }
         set { extractionRaw = newValue?.rawValue }

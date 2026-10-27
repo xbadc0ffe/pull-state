@@ -28,9 +28,11 @@ struct HistoryScreen: View {
 
     private var totalShots: Int { shots.count }
     private var totalGrams: Double { shots.reduce(0) { $0 + $1.yield } }
+    /// Average over rated shots only; unrated (0) shots are not "zero stars".
     private var avgRating: String {
-        guard !shots.isEmpty else { return "—" }
-        return String(format: "%.1f", Double(shots.reduce(0) { $0 + $1.rating }) / Double(shots.count))
+        let rated = shots.filter { $0.rating > 0 }
+        guard !rated.isEmpty else { return "—" }
+        return String(format: "%.1f", Double(rated.reduce(0) { $0 + $1.rating }) / Double(rated.count))
     }
 
     private var filtered: [Shot] {
@@ -80,7 +82,7 @@ struct HistoryScreen: View {
             ) {
                 EmptyView()
             } trailing: {
-                PSIconBtn(systemName: "ellipsis", action: onShowAbout)
+                PSIconBtn(systemName: "ellipsis", label: "More", action: onShowAbout)
             }
             .psContentColumn()
 

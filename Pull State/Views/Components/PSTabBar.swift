@@ -1,7 +1,5 @@
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#endif
 
 /// The four launch-time tabs, in display order. `beans` returns "" for
 /// `systemImage` because the Beans tab uses the Canvas-drawn `BeanIcon`
@@ -14,6 +12,7 @@ enum PSTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
     var label: String { rawValue.uppercased() }
+    var accessibilityLabel: String { rawValue.capitalized }
 
     var systemImage: String {
         switch self {
@@ -25,11 +24,9 @@ enum PSTab: String, CaseIterable, Identifiable {
     }
 
     private static let hardwareSymbol: String = {
-        #if canImport(UIKit)
         if UIImage(systemName: "espresso.machine") != nil {
             return "espresso.machine"
         }
-        #endif
         return "cup.and.saucer.fill"
     }()
 }
@@ -125,6 +122,8 @@ struct PSTabBar: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(tab.accessibilityLabel)
+                .accessibilityAddTraits(isActive ? [.isSelected] : [])
             }
         }
         .padding(5)
@@ -137,5 +136,7 @@ struct PSTabBar: View {
         .padding(.horizontal, 10)
         .padding(.top, 8)
         .padding(.bottom, 6)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Tabs")
     }
 }

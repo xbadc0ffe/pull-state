@@ -19,7 +19,7 @@ struct HardwareScreen: View {
             PSNavBar(title: "Hardware", large: true) {
                 EmptyView()
             } trailing: {
-                PSIconBtn(systemName: "ellipsis", action: onShowAbout)
+                PSIconBtn(systemName: "ellipsis", label: "More", action: onShowAbout)
             }
             .psContentColumn()
 

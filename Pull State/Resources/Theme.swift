@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The full set of warm-leather color tokens used across the app.
 ///
@@ -9,7 +10,12 @@ import SwiftUI
 /// without prop-drilling. Sheet presentations do not inherit environment
 /// automatically — sheet builders must re-set `\.psPalette` (and `\.psTempUnit`)
 /// explicitly.
-struct PSPalette {
+///
+/// `dynamicTypeSize` rides along so the environment value changes whenever
+/// the user's text size does; every view reads `\.psPalette`, so the whole
+/// tree re-renders and `PSFont` picks up the new `UIFontMetrics` scale.
+struct PSPalette: Equatable {
+    var dynamicTypeSize: DynamicTypeSize = .large
     let page: Color
     let surface: Color
     let surfaceAlt: Color
@@ -70,8 +76,10 @@ extension PSPalette {
         placeholderB: Color(hex: 0x2E231B)
     )
 
-    static func resolve(for scheme: ColorScheme) -> PSPalette {
-        scheme == .dark ? .dark : .light
+    static func resolve(for scheme: ColorScheme, typeSize: DynamicTypeSize = .large) -> PSPalette {
+        var p: PSPalette = scheme == .dark ? .dark : .light
+        p.dynamicTypeSize = typeSize
+        return p
     }
 }
 
@@ -103,22 +111,33 @@ extension EnvironmentValues {
     }
 }
 
-/// Typography helpers. Sizes are explicit `CGFloat`s rather than `.title`
-/// / `.body` so the layout matches the visual prototype, but they still pass
-/// through `Font.system(size:)` and respect Dynamic Type scaling.
+/// Typography helpers. Sizes are explicit design-time points so the layout
+/// matches the visual prototype, then scaled with the user's Dynamic Type
+/// setting through `UIFontMetrics` (a plain `Font.system(size:)` would be a
+/// fixed size). Scaling is capped at 1.5× so the fixed-size chrome (tab bar,
+/// 32 pt icon buttons, timer squares) stays usable at accessibility sizes.
 struct PSFont {
+    static let maxScale: CGFloat = 1.5
+
     static func display(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
-        .system(size: size, weight: weight, design: .serif)
+        .system(size: scaled(size), weight: weight, design: .serif)
     }
     static func body(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .default)
+        .system(size: scaled(size), weight: weight, design: .default)
     }
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
+        .system(size: scaled(size), weight: weight, design: .monospaced)
+    }
+
+    static func scaled(_ size: CGFloat) -> CGFloat {
+        let metric = UIFontMetrics(forTextStyle: .body).scaledValue(for: size)
+        return min(metric, size * maxScale)
     }
 }
 
-/// Date and duration formatters used by every screen.
+/// Date, duration and number formatters used by every screen. Formatters are
+/// cached — `DateFormatter` construction is expensive enough to matter inside
+/// list rows.
 enum PSFmt {
     static func seconds(_ s: Double) -> String {
         guard s.isFinite else { return "0.0s" }
@@ -128,41 +147,34 @@ enum PSFmt {
         return String(format: "%d:%04.1f", m, rem)
     }
 
-    static func shortDate(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: d)
+    /// Whole numbers print without a decimal point ("18"), everything else
+    /// with one decimal ("18.5"). Used for dose/yield/pressure/recipe values.
+    static func number(_ d: Double) -> String {
+        guard d.isFinite else { return "—" }
+        return d == d.rounded() ? "\(Int(d))" : String(format: "%.1f", d)
     }
 
-    static func longDate(_ d: Date) -> String {
+    static func shortDate(_ d: Date) -> String { shortDateFormatter.string(from: d) }
+    static func longDate(_ d: Date) -> String { longDateFormatter.string(from: d) }
+    static func shortDateMono(_ d: Date) -> String { shortDateMonoFormatter.string(from: d) }
+    static func cardDate(_ d: Date) -> String { cardDateFormatter.string(from: d) }
+    static func detailDate(_ d: Date) -> String { detailDateFormatter.string(from: d) }
+
+    private static let shortDateFormatter: DateFormatter = fixed("yyyy-MM-dd")
+    private static let shortDateMonoFormatter: DateFormatter = fixed("MM-dd")
+    private static let cardDateFormatter: DateFormatter = fixed("yyyy-MM-dd HH:mm")
+    private static let detailDateFormatter: DateFormatter = fixed("yyyy-MM-dd · HH:mm:ss")
+    private static let longDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .long
         f.timeStyle = .none
-        return f.string(from: d)
-    }
+        return f
+    }()
 
-    static func shortDateMono(_ d: Date) -> String {
+    private static func fixed(_ pattern: String) -> DateFormatter {
         let f = DateFormatter()
-        f.dateFormat = "MM-dd"
-        return f.string(from: d)
-    }
-
-    static func cardDate(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd HH:mm"
-        return f.string(from: d)
-    }
-
-    static func detailDate(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd · HH:mm:ss"
-        return f.string(from: d)
-    }
-
-    static func nowShortDate(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "MMM d, h:mm a"
-        return f.string(from: d)
+        f.dateFormat = pattern
+        return f
     }
 }
 

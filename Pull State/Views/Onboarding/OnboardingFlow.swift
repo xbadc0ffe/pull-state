@@ -9,6 +9,7 @@ struct OnboardingFlow: View {
     @Bindable var settings: AppSettings
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     @State private var step: Int = 0
 
@@ -17,7 +18,7 @@ struct OnboardingFlow: View {
     @State private var bean = OnbBeanEntry(name: "", roaster: "", roast: .medium)
 
     private let steps = ["welcome", "hardware", "bean", "ready"]
-    private var palette: PSPalette { PSPalette.resolve(for: scheme) }
+    private var palette: PSPalette { PSPalette.resolve(for: scheme, typeSize: typeSize) }
 
     var body: some View {
         ZStack {
@@ -53,7 +54,7 @@ struct OnboardingFlow: View {
                         case "hardware":
                             OnbHardwareStep(machine: $machine, grinder: $grinder)
                         case "bean":
-                            OnbBeanStep(bean: $bean)
+                            OnbBeanStep(bean: $bean, bagNumber: settings.nextBagNumber)
                         default:
                             OnbReadyStep(machine: machine, grinder: grinder, bean: bean)
                         }

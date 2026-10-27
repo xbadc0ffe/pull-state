@@ -11,7 +11,6 @@ struct BeanDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.psPalette) private var palette
-    @Environment(\.colorScheme) private var scheme
 
     @Query private var beans: [Bean]
     private var bean: Bean? { beans.first }
@@ -44,7 +43,7 @@ struct BeanDetailView: View {
             PSPageBackground()
             VStack(spacing: 0) {
                 PSNavBar(title: editing ? "Edit bean" : "Bean") {
-                    PSIconBtn(systemName: "chevron.left", action: { dismiss() })
+                    PSIconBtn(systemName: "chevron.left", label: "Back", action: { dismiss() })
                 } trailing: {
                     if let bean {
                         if editing {
@@ -86,7 +85,6 @@ struct BeanDetailView: View {
                 }
             }
         }
-        .environment(\.psPalette, PSPalette.resolve(for: scheme))
         .alert("Delete \(bean?.name ?? "this bean")?", isPresented: $showDeleteConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
@@ -131,7 +129,7 @@ struct BeanDetailView: View {
         if editing {
             PSEditablePhotoHeader(data: $dPhotoData, label: "BAG PHOTO")
         } else {
-            PSPhotoThumb(data: bean.photoData, label: "BAG PHOTO", radius: 14)
+            PSPhotoThumb(data: bean.photoData, label: "BAG PHOTO", radius: 14, hero: true)
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
         }
@@ -168,7 +166,7 @@ struct BeanDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 10)
 
-        section("Rating trend", topPad: 20) {
+        PSSection("Rating trend", topPad: 20) {
             PSCard {
                 if bean.ratingTrend.isEmpty {
                     Text("No shots yet")
@@ -184,7 +182,7 @@ struct BeanDetailView: View {
         }
 
         if !bean.notes.isEmpty {
-            section("Notes") {
+            PSSection("Notes", topPad: 18) {
                 PSCard {
                     Text(bean.notes)
                         .font(PSFont.body(13.5))
@@ -269,7 +267,7 @@ struct BeanDetailView: View {
                 .foregroundStyle(palette.inkMuted)
         }
 
-        section("Identity", topPad: 18) {
+        PSSection("Identity", topPad: 18) {
             PSCard {
                 VStack(spacing: 0) {
                     PSField(label: "Name") { PSTextInput(text: $dName, placeholder: "Black Gold") }
@@ -278,21 +276,21 @@ struct BeanDetailView: View {
             }
         }
 
-        section("Single Origin") {
+        PSSection("Single Origin", topPad: 18) {
             PSCard {
                 HStack {
                     Text("Single Origin")
                         .font(PSFont.body(13))
                         .foregroundStyle(palette.inkSoft)
                     Spacer()
-                    PSToggle(isOn: $dSingleOrigin)
+                    PSToggle(isOn: $dSingleOrigin, label: "Single Origin")
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
             }
         }
 
-        section("Process") {
+        PSSection("Process", topPad: 18) {
             PSCard {
                 VStack(alignment: .leading, spacing: 0) {
                     FlowLayout(spacing: 6, lineSpacing: 8) {
@@ -324,7 +322,7 @@ struct BeanDetailView: View {
             }
         }
 
-        section("Roast Level") {
+        PSSection("Roast Level", topPad: 18) {
             PSCard {
                 HStack(spacing: 6) {
                     ForEach(Roast.allCases) { r in
@@ -337,7 +335,7 @@ struct BeanDetailView: View {
             }
         }
 
-        section("Tasting Notes") {
+        PSSection("Tasting Notes", topPad: 18) {
             PSCard {
                 FlowLayout(spacing: 6, alignment: .leading) {
                     ForEach(TastingTag.allCases) { tag in
@@ -360,7 +358,7 @@ struct BeanDetailView: View {
             }
         }
 
-        section("Dates") {
+        PSSection("Dates", topPad: 18) {
             PSCard {
                 VStack(spacing: 0) {
                     PSField(label: "Roast Date") {
@@ -377,7 +375,7 @@ struct BeanDetailView: View {
             }
         }
 
-        section("Notes") {
+        PSSection("Notes", topPad: 18) {
             PSCard {
                 ZStack(alignment: .topLeading) {
                     if dNotes.isEmpty {
@@ -434,15 +432,6 @@ struct BeanDetailView: View {
             .overlay(Capsule().strokeBorder(accent ? palette.accent : palette.line, lineWidth: 0.5))
     }
 
-    @ViewBuilder
-    private func section<Content: View>(_ label: String, topPad: CGFloat = 18, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PSSectionLabel(label).padding(.leading, 4)
-            content()
-        }
-        .padding(.top, topPad)
-    }
-
     private func loadDraft(from bean: Bean) {
         dName = bean.name
         dRoaster = bean.roaster
@@ -458,8 +447,9 @@ struct BeanDetailView: View {
     }
 
     private func commitEdit(into bean: Bean) {
-        bean.name = dName.isEmpty ? "Untitled" : dName
-        bean.roaster = dRoaster
+        let trimmedName = dName.trimmingCharacters(in: .whitespacesAndNewlines)
+        bean.name = trimmedName.isEmpty ? "Untitled" : trimmedName
+        bean.roaster = dRoaster.trimmingCharacters(in: .whitespacesAndNewlines)
         bean.roast = dRoast
         bean.process = dProcess
         bean.processOther = dProcessOther

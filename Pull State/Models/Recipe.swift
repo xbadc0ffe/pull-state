@@ -37,6 +37,9 @@ nonisolated struct Recipe: Codable, Equatable, Sendable {
         self.pullPressure = pullPressure
     }
 
+    /// True when nothing is specified — a new or quick-added bean's recipe.
+    var isEmpty: Bool { self == Recipe() }
+
     enum CodingKeys: String, CodingKey {
         case grind, dose, yield, temp, preInfTime, preInfPressure, pullTime, pullPressure
     }

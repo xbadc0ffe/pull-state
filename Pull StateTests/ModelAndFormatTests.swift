@@ -24,6 +24,12 @@ struct RecipeCodableTests {
     @Test func emptyRecipeIsAllNil() {
         #expect(Recipe() == Recipe(grind: nil, dose: nil, yield: nil, temp: nil, preInfTime: nil, preInfPressure: nil, pullTime: nil, pullPressure: nil))
     }
+
+    @Test func isEmptyOnlyWhenNothingIsSet() {
+        #expect(Recipe().isEmpty)
+        #expect(!Recipe(grind: "22").isEmpty)
+        #expect(!Recipe(pullPressure: 9).isEmpty)
+    }
 }
 
 struct TemperatureUnitTests {

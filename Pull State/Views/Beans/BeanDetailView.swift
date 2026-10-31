@@ -6,6 +6,11 @@ import SwiftData
 /// the recipe card has its own separate Edit flow so users can adjust a
 /// recipe inline without entering the full edit. Delete cascades the bean's
 /// shots — confirmation copy reflects the count.
+///
+/// A quick-added bean has no roast or process yet; view mode shows a hint
+/// instead, and edit mode leaves those pills unselected until one is picked.
+/// Saving an edit clears `isPlaceholder`, so an "Unknown" bean the user has
+/// adopted is never tidied away.
 struct BeanDetailView: View {
     let beanID: PersistentIdentifier
     @Environment(\.modelContext) private var context
@@ -22,8 +27,9 @@ struct BeanDetailView: View {
 
     @State private var dName = ""
     @State private var dRoaster = ""
-    @State private var dRoast: Roast = .medium
-    @State private var dProcess: BeanProcess = .washed
+    /// nil while the bean has no roast / process set (quick-added beans).
+    @State private var dRoast: Roast? = nil
+    @State private var dProcess: BeanProcess? = nil
     @State private var dProcessOther = ""
     @State private var dSingleOrigin = false
     @State private var dRoastDate: Date = .now
@@ -153,9 +159,20 @@ struct BeanDetailView: View {
             .foregroundStyle(palette.inkMuted)
             .padding(.top, 2)
 
+        if bean.roastIfSet == nil && bean.processIfSet == nil {
+            Text("Roast and process not set yet. Tap Edit to add them.")
+                .font(PSFont.body(11))
+                .foregroundStyle(palette.inkMuted)
+                .padding(.top, 8)
+        }
+
         FlowLayout(spacing: 6, lineSpacing: 6, alignment: .leading) {
-            PSRoastBadge(level: bean.roast)
-            chip(bean.processDisplay.uppercased(), accent: false)
+            if let roast = bean.roastIfSet {
+                PSRoastBadge(level: roast)
+            }
+            if bean.processIfSet != nil {
+                chip(bean.processDisplay.uppercased(), accent: false)
+            }
             if bean.singleOrigin {
                 chip("SINGLE ORIGIN", accent: true)
             }
@@ -435,8 +452,8 @@ struct BeanDetailView: View {
     private func loadDraft(from bean: Bean) {
         dName = bean.name
         dRoaster = bean.roaster
-        dRoast = bean.roast
-        dProcess = bean.process
+        dRoast = bean.roastIfSet
+        dProcess = bean.processIfSet
         dProcessOther = bean.processOther
         dSingleOrigin = bean.singleOrigin
         dRoastDate = bean.roastDate
@@ -450,9 +467,11 @@ struct BeanDetailView: View {
         let trimmedName = dName.trimmingCharacters(in: .whitespacesAndNewlines)
         bean.name = trimmedName.isEmpty ? "Untitled" : trimmedName
         bean.roaster = dRoaster.trimmingCharacters(in: .whitespacesAndNewlines)
-        bean.roast = dRoast
-        bean.process = dProcess
+        // Left unset unless the user picked one.
+        if let dRoast { bean.roast = dRoast }
+        if let dProcess { bean.process = dProcess }
         bean.processOther = dProcessOther
+        bean.isPlaceholder = false
         bean.singleOrigin = dSingleOrigin
         bean.roastDate = dRoastDate
         bean.purchaseDate = dPurchaseDate

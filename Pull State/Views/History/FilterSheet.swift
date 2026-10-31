@@ -112,7 +112,7 @@ struct FilterSheet: View {
                     PSCard {
                         SelectRow(
                             options: [SelectOption(id: nil, label: "Any beans")] +
-                                beans.map { SelectOption(id: $0.persistentModelID, label: $0.name, sub: "#\($0.bagNumber) · \($0.roaster)") },
+                                beans.map { SelectOption(id: $0.persistentModelID, label: $0.name, sub: $0.pickerSubtitle) },
                             selectedID: filterBeanID,
                             onPick: { filterBeanID = $0 },
                             last: true

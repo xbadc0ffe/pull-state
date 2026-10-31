@@ -89,23 +89,37 @@ struct BeanRowCard: View {
                             .font(PSFont.mono(10))
                             .foregroundStyle(palette.inkMuted)
                     }
-                    Text(bean.roaster)
-                        .font(PSFont.body(12))
-                        .foregroundStyle(palette.inkSoft)
-                        .padding(.bottom, 4)
+                    if !bean.roaster.isEmpty {
+                        Text(bean.roaster)
+                            .font(PSFont.body(12))
+                            .foregroundStyle(palette.inkSoft)
+                    }
+                    // Quick-added beans have no roast/process yet: show a
+                    // hint instead of inventing "Medium · Washed".
                     HStack(spacing: 6) {
-                        PSRoastBadge(level: bean.roast)
-                        Text(bean.processDisplay.uppercased())
-                            .font(PSFont.mono(9.5))
-                            .tracking(0.6)
-                            .foregroundStyle(palette.inkMuted)
+                        if let roast = bean.roastIfSet {
+                            PSRoastBadge(level: roast)
+                        }
+                        if bean.processIfSet != nil {
+                            Text(bean.processDisplay.uppercased())
+                                .font(PSFont.mono(9.5))
+                                .tracking(0.6)
+                                .foregroundStyle(palette.inkMuted)
+                        }
                         if bean.singleOrigin {
-                            Text("· SINGLE ORIGIN")
+                            Text(bean.processIfSet == nil ? "SINGLE ORIGIN" : "· SINGLE ORIGIN")
                                 .font(PSFont.mono(9.5))
                                 .tracking(0.6)
                                 .foregroundStyle(palette.accentDeep)
                         }
+                        if bean.roastIfSet == nil && bean.processIfSet == nil && !bean.singleOrigin {
+                            Text("DETAILS NOT SET")
+                                .font(PSFont.mono(9.5))
+                                .tracking(0.6)
+                                .foregroundStyle(palette.inkMuted)
+                        }
                     }
+                    .padding(.top, 4)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")

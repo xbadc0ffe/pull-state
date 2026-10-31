@@ -7,10 +7,13 @@ import SwiftData
 /// copied into the draft so a fresh bag of the same coffee inherits the
 /// dialed-in numbers. Match is tracked by `persistentModelID`, so re-typing
 /// the same combination doesn't clobber in-progress recipe edits.
+///
+/// `onSaved` receives the new bean (already saved, so its id is permanent),
+/// letting the Log screen and the shot editors select it straight away.
 struct BeanAddForm: View {
     @Bindable var settings: AppSettings
     let onCancel: () -> Void
-    let onSaved: () -> Void
+    let onSaved: (Bean) -> Void
 
     @Environment(\.modelContext) private var context
     @Environment(\.psPalette) private var palette
@@ -262,6 +265,6 @@ struct BeanAddForm: View {
         context.insert(bean)
         settings.nextBagNumber = nextBag + 1
         try? context.save()
-        onSaved()
+        onSaved(bean)
     }
 }

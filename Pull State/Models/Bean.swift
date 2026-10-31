@@ -5,6 +5,11 @@ import SwiftData
 /// carries a per-bag recipe stored as JSON `Data` (see `Recipe`). `bagNumber`
 /// is monotonic via `AppSettings.nextBagNumber` and is never decremented when a
 /// bean is deleted, so historical references in shot history stay stable.
+///
+/// A bean created from the Log screen's save prompt (`quickAdd`) only knows
+/// its name: `roastRaw` / `processRaw` are empty, which `roastIfSet` /
+/// `processIfSet` report as nil so the UI shows nothing rather than a made-up
+/// "Medium · Washed".
 @Model
 final class Bean {
     var name: String
@@ -20,6 +25,12 @@ final class Bean {
     var createdAt: Date
     @Attribute(.externalStorage) var photoData: Data?
     var tastingTagsRaw: [String] = []
+    /// True only for the "Unknown" bean the Log screen creates when a shot is
+    /// saved before any bean exists and the name prompt is left blank. Such a
+    /// placeholder is deleted once its last shot moves to another bean
+    /// (`ShotReassignment.removeEmptyPlaceholders`). Saving an edit on the
+    /// bean's page clears the flag, so a bean the user has adopted stays.
+    var isPlaceholder: Bool = false
 
     private var recipeData: Data?
 
@@ -68,8 +79,19 @@ final class Bean {
         set { roastRaw = newValue.rawValue }
     }
 
+    /// The roast level, or nil when it was never set (a quick-added bean).
+    var roastIfSet: Roast? { Roast(rawValue: roastRaw) }
+
+    /// The process, or nil when it was never set (a quick-added bean).
+    var processIfSet: BeanProcess? { BeanProcess(rawValue: processRaw) }
+
     var processDisplay: String {
         process == .other ? (processOther.isEmpty ? "Other" : processOther) : process.rawValue
+    }
+
+    /// "Roaster · #3" for picker rows, or just "#3" when no roaster is set.
+    var pickerSubtitle: String {
+        roaster.isEmpty ? "#\(bagNumber)" : "\(roaster) · #\(bagNumber)"
     }
 
     var tastingTags: [TastingTag] {
@@ -104,5 +126,31 @@ final class Bean {
         let rated = ratedShots
         guard !rated.isEmpty else { return nil }
         return Double(rated.reduce(0) { $0 + $1.rating }) / Double(rated.count)
+    }
+}
+
+extension Bean {
+    /// Name used when the Log screen's bean prompt is left blank.
+    static let unknownName = "Unknown"
+
+    /// A bean created on the fly when a shot is saved before any bean exists.
+    /// Only the name is known: roaster, roast and process stay blank until
+    /// the user fills them in on the bean page. A blank name becomes
+    /// "Unknown", and an "Unknown" bean is marked as a placeholder.
+    static func quickAdd(name rawName: String, bagNumber: Int) -> Bean {
+        let trimmed = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = trimmed.isEmpty ? unknownName : trimmed
+        let bean = Bean(
+            name: name,
+            bagNumber: bagNumber,
+            roaster: "",
+            singleOrigin: false,
+            process: .other,
+            roast: .medium
+        )
+        bean.processRaw = ""
+        bean.roastRaw = ""
+        bean.isPlaceholder = name.caseInsensitiveCompare(unknownName) == .orderedSame
+        return bean
     }
 }

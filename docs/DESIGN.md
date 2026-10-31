@@ -8,7 +8,7 @@ This document reflects the implementation as committed. When code and doc disagr
 
 ## 1. App Overview
 
-Pull State is built around a single user (no accounts, no sync in v1) tracking espresso shots against a personal library of beans and hardware. The app launches into a four-tab structure with a custom warm-toned design system. All data lives in a local SwiftData store. The app starts empty: an onboarding flow gathers the user's first machine, grinder, and bean, after which the Log tab becomes usable.
+Pull State is built around a single user (no accounts, no sync in v1) tracking espresso shots against a personal library of beans and hardware. The app launches into a four-tab structure with a custom warm-toned design system. All data lives in a local SwiftData store. The app starts empty: an onboarding flow offers to set up the user's first machine, grinder, and bean, but none of it is required — the Log tab saves shots from the first launch (a missing bean is named at save time, hardware is optional; see §3.1), and shots can be re-filed onto the right bean and hardware later (§3.2).
 
 **Primary loop:** dial in a bean → log a shot → review the result → adjust the bean's saved recipe → repeat.
 
@@ -57,8 +57,9 @@ This keeps the warm-wash gradient edge-to-edge **and** lets vertical drags on th
 
 - **About sheet** — large detent, custom × close in top-right
 - **Recipe sheet** — large detent over `palette.surface`, opened from the Log screen's "View Recipe" chip; matches About sheet chrome
-- **Add bean** / **Add hardware** — full-screen sheets (page background)
+- **Add bean** / **Add hardware** — full-screen sheets (page background). Opened from the Beans / Hardware tabs and also from any Source picker's "+ New …" row (Log screen, Shot edit, bulk edit), which present their own copy of the form and select the result
 - **Filter** / **Sort** — large/medium detents over palette.surface
+- **Bulk edit** — large detent over `palette.surface`, from History's Select mode (§3.2)
 - **Onboarding** — full-screen overlay rendered in place of `MainTabView` until `AppSettings.hasCompletedOnboarding` flips
 - **Camera capture** — full-screen cover hosting `UIImagePickerController(.camera)` from `PSPhotoSourceMenu` (see §14)
 
@@ -70,15 +71,17 @@ This keeps the warm-wash gradient edge-to-edge **and** lets vertical drags on th
 
 Section order, top to bottom:
 
-1. **Source** — three picker rows in one card: Machine, Grinder, Beans. Each row expands inline when tapped to show options. Each row and each option renders a leading thumbnail (`PSPhotoThumb`, see §5.3) sourced from the entity's `photoData`, falling back to the striped `PSPlaceholder` when no photo has been attached. If any list is empty, a single placeholder card directs the user to set up their gear first; the Save button stays disabled. When a bean is selected, a **View Recipe** chip appears under the card → opens `RecipeSheet` (§3.7). On first appear, machine/grinder/bean are pre-selected from the **most recently logged shot** (`Shot.date` descending, take 1); when no shots exist yet, each picker falls back to the first item in its respective list. After a save the same equipment stays selected, so the next shot starts with the just-saved gear.
+1. **Source** — three picker rows in one card: Machine, Grinder, Beans, **always shown** (no setup is required to log). Each row expands inline when tapped to show options; the current choice carries a checkmark and every list ends in a **"+ New machine / grinder / bean"** row that opens the matching add form (§3.3, §3.4) and selects the item it creates. Each row and each option renders a leading thumbnail (`PSPhotoThumb`, see §5.3) sourced from the entity's `photoData`, falling back to the striped `PSPlaceholder` when no photo has been attached. **A row with nothing set up yet** (its list is empty) reads **"Not set"** in the accent colour with a hint ("Tap to add your machine", "Tap to add, or name it when you save"), shows a dashed "+" badge in place of the photo, and **pulses** with `PSAttentionGlow` (a steady highlight when Reduce Motion is on); tapping it opens the add form directly. When a bean is selected, a **View Recipe** chip appears under the card → opens `RecipeSheet` (§3.7). On first appear, machine/grinder/bean are pre-selected from the **most recently logged shot** (`Shot.date` descending, take 1); when no shots exist yet (or the last shot had no machine/grinder), each picker falls back to the first item in its respective list. After a save the same equipment stays selected, so the next shot starts with the just-saved gear. The recipe preload (item 3) follows the *effective* bean, so it also runs when the selected bean disappears and the picker falls back to another one.
 2. **Timer** — `DualTrackTimer`. See §6.
-3. **Settings** — `Grind Setting` text field at the top (free-text, e.g. `"22"`), then sliders for `Dose / Weight In` (7–25 g, 0.1 step), `Yield / Weight Out` (7–75 g, 0.1 step), `Water Temp` (70–105 °C, 0.5 step — converted to Fahrenheit when the user has chosen °F, see §11.1), `Pre-Infusion Pressure` (0–4 bar, 0.1 step), `Pull Pressure` (4–12 bar, 0.1 step), and a **Paper Filter** `PSToggle` row at the **bottom** of the card (below Pull Pressure). When the bean changes, **only the recipe fields that are non-nil pre-populate their slider** — nil fields leave the slider where it was. The Grind Setting field also preloads from `recipe.grind` (and clears when the recipe value is nil). The Paper Filter toggle does **not** load from the bean — it is a per-shot decision, not a recipe parameter. A small caption under the card reads "Loaded from {bean name} recipe."
+3. **Settings** — `Grind Setting` text field at the top (free-text, e.g. `"22"`), then sliders for `Dose / Weight In` (7–25 g, 0.1 step), `Yield / Weight Out` (7–75 g, 0.1 step), `Water Temp` (70–105 °C, 0.5 step — converted to Fahrenheit when the user has chosen °F, see §11.1), `Pre-Infusion Pressure` (0–4 bar, 0.1 step), `Pull Pressure` (4–12 bar, 0.1 step), and a **Paper Filter** `PSToggle` row at the **bottom** of the card (below Pull Pressure). When the bean changes, **only the recipe fields that are non-nil pre-populate their slider** — nil fields leave the slider where it was. The Grind Setting field also preloads from `recipe.grind` (and clears when the recipe value is nil). The Paper Filter toggle does **not** load from the bean — it is a per-shot decision, not a recipe parameter. A small caption under the card reads "Loaded from {bean name} recipe." — shown only when that recipe has at least one value (`Recipe.isEmpty` is false), so a new or quick-added bean doesn't claim to have loaded anything. The Grind Setting row is the shared `GrindSettingField` (also used by Shot edit).
 4. **Extraction** — three pills (Sour / Perfect / Bitter), tone-colored. Tappable to toggle on/off (single-select).
 5. **Tasting notes** — a flow-laid grid of all eight `TastingTag` values, **horizontally centered** within the column (`FlowLayout(spacing: 6, alignment: .center)`). Multi-select. (Tag set: Chocolate, Caramel, Fruity, Citrus, Floral, Nutty, Smoky, Earthy.)
 6. **Rating** — five stars (`PSStars`), bound to an Int 0–5.
 7. **Photo + Date card** — `PSPhotoSourceMenu` (Take Photo / Choose from Photos action sheet, see §14), with thumbnail + Change/Add/× actions. Date defaults to `.now` and is editable via a compact `DatePicker`.
 8. **Notes** — multi-line `TextEditor` over the card background, with placeholder.
-9. **Save shot button** — disabled unless bean + machine + grinder are all selected. Briefly flashes "SAVED ✓" after success and resets the form (timer, rating, extraction, tags, notes, photo, date back to `.now`, grind cleared then re-populated from the still-selected bean's recipe). Equipment selection is preserved across saves; the slider values for dose/yield/temp/pressure and the Paper Filter toggle are also preserved.
+9. **Save shot button** — **always enabled.** Machine and grinder are optional (a shot saves with either or both left nil; fill them in later, §3.2). Briefly flashes "SAVED ✓" after success and resets the form (timer, rating, extraction, tags, notes, photo, date back to `.now`, grind cleared then re-populated from the still-selected bean's recipe). Equipment selection is preserved across saves; the slider values for dose/yield/temp/pressure and the Paper Filter toggle are also preserved.
+
+**Bean-name prompt (no beans yet).** A shot always gets a bean. When Save is tapped while the bean library is empty, an alert asks for one: title `Name this bean`, a text field (placeholder `Unknown`, word capitalisation), message *"No beans are set up yet. Enter this coffee's name, or leave it blank to save it as "Unknown". You can add the details on the Beans tab later."*, buttons **Save Shot** / **Cancel**. Save Shot creates a real bean with `Bean.quickAdd(name:bagNumber:)` — trimmed name or "Unknown", the next bag number (`nextBagNumber` increments), empty roaster, roast and process **left unset** (see §3.3), single origin off, empty recipe — then saves the shot against it and selects it, so later shots pre-select it and the prompt only ever appears while no bean exists. A bean saved as "Unknown" (blank or typed, case-insensitive) is a **placeholder** (`Bean.isPlaceholder`): it is deleted automatically once its last shot is moved to another bean (§3.2) unless the user has edited it. Cancel saves nothing. If a recipe prompt follows (the new bean's recipe is empty, so "Save recipe?" normally does), it is presented ~0.45 s later so it doesn't collide with the closing alert.
 
 **After saving:** at most one of two prompts may appear (mutually exclusive):
 
@@ -99,17 +102,21 @@ If neither condition is met, no prompt appears. Both prompts use `Bean.shots` (w
 - Filter chip (with badge showing active filter count) + Sort chip + filtered/total ratio
 - Vertical list of `ShotCard` rows, each tappable to push `ShotDetailView`
 
+**Select mode and bulk edit** — a **Select** text button sits left of the `…` icon in the nav bar whenever shots exist (it reads **Done** while selecting). In Select mode, tapping a card ticks it instead of opening it (`ShotCard(selected:)` shows a leading checkbox, hides the chevron and draws an accent outline when ticked); the chip row becomes **Select All / Select None** + Filter + "N selected" (Sort is hidden to keep the row on one line), and a bottom bar button reads **"Edit N shots"** (disabled, "Tap shots to select them", while nothing is ticked). Only ticked shots that are still visible under the current filters count, so filter → Select All → Edit is the way to re-file a whole group (e.g. every shot on "Unknown"). The button opens `ShotBulkEditSheet`: one card with Beans / Machine / Grinder `PickerRow`s, each starting on **Keep current** (subtitle "Now: Flair 58" / "Now: none" / "Now: mixed"); hardware rows also offer **None**; every list ends in "+ New …" (the add form opens over the sheet; the hardware form's backfill offer is switched off here). **Apply to N shots** (enabled once something changes) writes through `ShotReassignment.apply` and leaves Select mode. Select mode also ends when the history becomes empty.
+
+Filters that point at a bean, machine or grinder that no longer exists (deleted, wiped, or a placeholder tidied away) are dropped automatically, so the list never silently stays empty.
+
 `ShotCard`'s leading thumbnail uses the fallback chain `shot.photoData → shot.bean?.photoData → PSPlaceholder`, implemented via the optional `fallback: Data?` parameter on `PSPhotoThumb` (§5.3). A shot without its own photo therefore shows the bag's photo at a glance instead of the striped placeholder. This fallback is scoped to the History `ShotCard` only — the Shot detail hero photo, Log source picker thumbnails, and Bean / Hardware overview rows continue to use the single-data path.
 
 **Filter sheet** — extraction tone pills, **tasting-notes pills** (multi-select; AND-match — only shots that contain *all* selected tags pass), a **Paper Filter** row with three states backed by `Bool?` (nil = Any, no filtering; `true` = "With Filter", filters to `usedPaperFilter == true`; `false` = "Without Filter", filters to `usedPaperFilter == false`). Tapping a selected pill deselects it back to Any, so the user can never land in a contradictory "both selected" state. Below it: min-rating pills (Any / 2+ / 3+ / 4+ / 5+), and three select rows (any beans / any machine / any grinder, populated from the actual library). The filter chip's badge counter on History sums extraction + min-rating + each select + **each active tag** + **+1 whenever the paper-filter dimension is non-nil** (either With Filter or Without Filter). Clear-all button on the left, Apply on the right.
 
 **Sort sheet** — four options: Newest first, Oldest first, Highest rated, Lowest rated. Selection is highlighted with accent ring and a checkmark.
 
-`ShotCard` shows a one-line preview of shot stats below the rating + extraction row, ordered **`time - ratio - dose → yield`** with plain ASCII hyphens between groups (e.g. `27.0s - 1:2.10 - 18.0g → 36.0g`). The arrow between dose and yield is the Unicode rightwards arrow `→` (U+2192).
+`ShotCard` shows a one-line preview of shot stats below the rating + extraction row, ordered **`time - ratio - dose → yield`** with plain ASCII hyphens between groups (e.g. `27.0s - 1:2.10 - 18.0g → 36.0g`). The arrow between dose and yield is the Unicode rightwards arrow `→` (U+2192). A shot with no bean shows "UNKNOWN" and no bag number (never "#0").
 
 **Shot detail (view mode):**
 - Photo (or placeholder) — square at top, `.scaledToFit()` inside the slot
-- Bean name + bag # + stars + extraction pill
+- Bean name + bag # (hidden when the shot has no bean) + stars + extraction pill
 - "Numbers" card: Dose, Yield (with `1:X.YY` ratio suffix), Grind, Water, Pre-Infusion Pressure, Pre-Infusion Time, Pull Pressure, Pull Time, plus a `Paper Filter: Yes` row that appears **only when `usedPaperFilter == true`** (hidden otherwise to keep the card tight in the common case)
 - "Hardware" card: Machine, Grinder
 - "Tasting notes" — pills (or "No tags")
@@ -117,11 +124,13 @@ If neither condition is met, no prompt appears. Both prompts use `Bean.shots` (w
 - Detail timestamp footer
 
 **Shot detail (edit mode):**
-Same screen, but every field becomes editable: source pickers, extraction, tags (rendered in `FlowLayout` matching Log spacing), seven sliders inside the Settings card (dose, yield, temp, pre-infusion pressure, pull pressure, pre-infusion time 0–60 s, pull time 0–120 s) with the same C/F display conversion as the Log screen; a value outside a slider's range (a 150 s pull entered manually on Log) is still shown exactly, with the thumb pinned at the end, then a **Paper Filter** `PSToggle` row at the **bottom** of the Settings card (mirroring Log's placement below Pull Pressure). The square photo at the top of the screen is itself the editable surface — `PSEditablePhotoHeader` (§14) carries the pencil-overlay button that opens `PSPhotoSourceMenu`, so there is no separate Photo section in edit mode. Below the Settings card: date picker, notes editor. Cancel + Save in the nav bar trailing slot. A red **Delete shot** button at the bottom triggers a confirmation alert.
+Same screen, but every field becomes editable. This is how a shot logged without full setup is fixed up later. The **Source** card's Machine / Grinder / Beans pickers show "Not set" (accent, no pulse) when empty; Machine and Grinder offer **None** at the top of their lists; every list ends in **"+ New …"**, which opens the add form over the editor and selects what it creates (adding hardware here still offers the backfill prompt, §3.4). A shot always keeps a bean — there is no "None" for beans. On Save, if the bean changed and the previous bean is a placeholder ("Unknown") left with no shots, that bean is deleted (`ShotReassignment.removeEmptyPlaceholders`); the bean pages, charts, hardware shot counts, History filters and stats all follow the new assignment automatically through the SwiftData relationships. Then: extraction, tags (rendered in `FlowLayout` matching Log spacing), a **Grind Setting** text row (`GrindSettingField`, trimmed on save) at the top of the Settings card followed by seven sliders (dose, yield, temp, pre-infusion pressure, pull pressure, pre-infusion time 0–60 s, pull time 0–120 s) with the same C/F display conversion as the Log screen; a value outside a slider's range (a 150 s pull entered manually on Log) is still shown exactly, with the thumb pinned at the end, then a **Paper Filter** `PSToggle` row at the **bottom** of the Settings card (mirroring Log's placement below Pull Pressure). The square photo at the top of the screen is itself the editable surface — `PSEditablePhotoHeader` (§14) carries the pencil-overlay button that opens `PSPhotoSourceMenu`, so there is no separate Photo section in edit mode. Below the Settings card: date picker, notes editor. Cancel + Save in the nav bar trailing slot. A red **Delete shot** button at the bottom triggers a confirmation alert.
 
 ### 3.3 Beans
 
-List of `BeanRowCard`s sorted by bag number descending. Each card shows: bag photo (`PSPhotoThumb` over `bean.photoData`, falling back to the striped `PSPlaceholder` when nil), name, bag #, roaster, roast badge, process tag, optional "SINGLE ORIGIN" label.
+List of `BeanRowCard`s sorted by bag number descending. Each card shows: bag photo (`PSPhotoThumb` over `bean.photoData`, falling back to the striped `PSPlaceholder` when nil), name, bag #, roaster (omitted when empty), roast badge, process tag, optional "SINGLE ORIGIN" label.
+
+**Quick-added beans** (created by the Log screen's bean-name prompt, §3.1) know only their name: roaster is empty and `roastRaw` / `processRaw` are empty strings, which `Bean.roastIfSet` / `processIfSet` report as nil. Wherever a roast badge or process tag would appear, nothing is shown instead of an invented "Medium · Washed": the row card reads **DETAILS NOT SET** when roast, process and single origin are all absent; Bean detail's view mode shows *"Roast and process not set yet. Tap Edit to add them."*; edit mode leaves the Roast and Process pills unselected and keeps them unset unless the user picks one. Saving an edit (top-level Edit → Save) also clears `isPlaceholder`, so an "Unknown" bean the user has adopted is never tidied away.
 
 **Empty state:** circular leaf icon, "No beans yet", "Tap + to log your first bag."
 
@@ -169,6 +178,8 @@ The Hardware tab icon uses the SF Symbol `espresso.machine` when available (iOS 
 
 **Add hardware form** — full-screen sheet, kind-aware: same form for "Add Machine" and "Add Grinder". The form opens with a `PSEditablePhotoHeader` at the top — the pencil overlay opens `PSPhotoSourceMenu` and the chosen image goes through the same crop sheet as everywhere else, then is persisted as `Equipment.photoData` on save. (In v1.1 this slot was a non-interactive "Add a photo" placeholder; in v1.2 the form actually attaches the photo at creation time.) Below the photo: Name uses `OnbCombobox` driven by `HardwareCatalog` (substring case-insensitive match against name; selecting a suggestion auto-fills Brand via `HardwareCatalog.brand(forName:kind:)`, and Brand stays user-editable). Brand uses `OnbField`. The catalog covers manual/lever espresso machines and the common hand-grinder + electric-grinder ranges (Flair, Cafelat, Wacaco, La Pavoni, 1Zpresso, Commandante, Timemore, Kinu, Knock, Weber Workshops, Option-O, Fellow, Niche, DF, Baratza, Mazzer, Eureka, Fiorenzato, …). The user can type a fully custom name not in the catalog.
 
+**Backfill offer.** After Save, if any logged shots have no machine (for a new machine) or no grinder (for a new grinder) — logged before any hardware existed, or whose hardware was deleted — the form stays up with an alert: title `Use {name} for past shots?`, message *"N logged shots have no machine yet. You can still change any shot later."*, buttons **Assign to N shots** / **Not now**. Assign attaches the new item to exactly those shots (`ShotReassignment.backfill`); shots that already have one are never touched. No alert appears when every shot already has one. This runs from every entry point (Hardware tab, Log "+ New …", Shot edit) except History's bulk edit, which passes `offerBackfill: false`. Save can't insert twice while the alert is up. `onSaved` hands the new `Equipment` back so the opener can select it (the Add Bean form does the same with the new `Bean`).
+
 ### 3.5 About sheet
 
 Presented from any tab via the `…` (ellipsis) icon in the top-right of the navigation bar. Large detent. Contents:
@@ -180,6 +191,7 @@ Presented from any tab via the `…` (ellipsis) icon in the top-right of the nav
 - Card with rows: **Built by** (badc0ffe), **Contact** (info@badc0ffe.net), **GitHub** (tappable `Link` to `https://github.com/xbadc0ffe/pull-state`, accent-colored + underlined), **Temperature** (Celsius / Fahrenheit switch — see §11.1), **Appearance** (System / Light / Dark switch), **Recipe Suggestions** (toggle for the post-save prompts, §3.1)
 - **Tip jar** and **Restore Purchases** — see §10
 - Footer copy block on `surfaceAlt` background
+- **Your data** (at the very bottom): **Export shots** card above a red-outlined **Wipe Data** button — see §10.3
 
 ### 3.6 Onboarding
 
@@ -230,6 +242,7 @@ final class Bean {
     var createdAt: Date
     @Attribute(.externalStorage) var photoData: Data?
     var tastingTagsRaw: [String] = []                       // [TastingTag.rawValue], inline default for migration
+    var isPlaceholder: Bool = false                         // auto-created "Unknown" bean, see below
     private var recipeData: Data?                           // JSON-encoded Recipe
 
     @Relationship(deleteRule: .cascade, inverse: \Shot.bean)
@@ -239,7 +252,12 @@ final class Bean {
 
 Computed/exposed:
 - `process: BeanProcess` and `roast: Roast` — get/set wrappers over the raw strings
+- `roastIfSet: Roast?` and `processIfSet: BeanProcess?` — nil when the raw string is empty (a quick-added bean, §3.3); display sites use these so an unset value shows nothing
 - `processDisplay: String` — uses `processOther` when process is `.other`
+- `pickerSubtitle: String` — "Roaster · #3", or "#3" when the roaster is empty; used by every bean picker and the History filter
+- `static func quickAdd(name:bagNumber:) -> Bean` — the Log screen's on-the-fly bean (§3.1): trimmed name or "Unknown", empty roaster, roast and process unset, single origin off, empty recipe; `isPlaceholder` is true when the name is "Unknown" (case-insensitive)
+
+`isPlaceholder` marks the auto-created "Unknown" bean. `ShotReassignment.removeEmptyPlaceholders` deletes a placeholder once its last shot has been moved to another bean (Shot edit, bulk edit); saving an edit on the bean's page clears the flag. Deleting or wiping shots does not trigger it — only a move does. The inline default lets existing stores migrate.
 - `recipe: Recipe` — JSON-decoded; **falls back to an empty `Recipe()` (all-nil)** when `recipeData` is nil or fails to decode. Setter encodes.
 - `tastingTags: [TastingTag]` — get/set wrapper over `tastingTagsRaw`. Read uses `compactMap(TastingTag.init(rawValue:))` so unrecognized raw values are silently dropped, matching the existing `Shot.tags` pattern. Stores the bag's claimed flavor profile (label expectations) — independent from `Shot.tagsRaw`, never surfaced outside the Beans tab.
 - `ratedShots: [Shot]` — shots with `rating > 0`; 0 means "unrated"
@@ -282,7 +300,7 @@ Computed:
 
 `@Attribute(.externalStorage)` keeps photo blobs out of the main SQLite file, so the DB stays small even with many photos.
 
-The references to Bean/Machine/Grinder are optional — a hardware item can be deleted without orphaning the shot's data.
+The references to Bean/Machine/Grinder are optional — a hardware item can be deleted without orphaning the shot's data. Since 1.5 `machine` and `grinder` can also be nil from the moment a shot is logged (no hardware set up yet); they are filled in later through Shot edit, History's bulk edit, or the backfill offer when hardware is added (§3.4). The Log screen always sets `bean` (creating one via the name prompt if needed), so in practice only legacy data could have a nil bean; the UI shows such a shot as "Unknown" without a bag number.
 
 `usedPaperFilter` records whether the user pulled the shot through a paper filter (e.g. AeroPress disk in a portafilter, paper basket disk). It is a per-shot decision, not a recipe parameter — `Recipe` carries no equivalent field. The Log screen and the Shot-edit screen both place the toggle at the **bottom** of the Settings card (below Pull Pressure); Log preserves the toggle's value across saves (matching how dose/yield/temp/pressure are preserved). The History filter sheet exposes it as a three-state filter (Any / With Filter / Without Filter, backed by an optional `Bool?` binding). The Shot detail's Numbers card surfaces a `Paper Filter: Yes` row only when the value is `true`.
 
@@ -354,7 +372,7 @@ struct Recipe {
 }
 ```
 
-`init(from: Decoder)` decodes every key with `decodeIfPresent`; a missing or null key decodes to nil. Old bean records that pre-date a field decode cleanly with that field as nil.
+`init(from: Decoder)` decodes every key with `decodeIfPresent`; a missing or null key decodes to nil. Old bean records that pre-date a field decode cleanly with that field as nil. `isEmpty` is true when every field is nil (used to hide the Log screen's "Loaded from … recipe" caption).
 
 **Every read site must guard for nil before using a value.** Anything that previously assumed a default (e.g. "the slider preloads to 18 g") now no-ops when the corresponding field is nil:
 - The Log screen's bean preload sets each slider only when its recipe field is non-nil; nil leaves the slider at its current value. The Grind Setting field preloads from `recipe.grind` when non-nil and clears when nil.
@@ -423,6 +441,9 @@ Defined in `Views/Components/` and used everywhere:
 - `PSPhotoSourceMenu` — universal photo entry point (§14): action sheet over Take Photo / Choose from Photos, falls back to Photos-only when the camera is unavailable
 - `PSEditablePhotoHeader` — the square photo header used at the top of every add/edit form (Bean add, Bean detail edit, Hardware add, Hardware detail edit, Shot detail edit). Composes `PSPhotoThumb` (or `PSPlaceholder` when no photo is set) with a bottom-right pencil button wired to `PSPhotoSourceMenu`, plus an ✕ remove button that appears alongside the pencil whenever a photo is set. Hit area is ≥ 44 pt; the pencil is visually subtle (palette surface circle + line stroke) but findable. Replaces the v1.1 `PhotoEditCard` row across the app
 - `ModeSwitch` (Appearance) and `TempUnitSwitch` (Celsius/Fahrenheit) — capsule segmented controls used by both About and Onboarding
+- `PSAttentionGlow` — repeating accent glow (a `PhaseAnimator` cycling a tinted, stroked, softly shadowed rounded rect every 1.1 s) drawn behind something that still needs setting up; a steady highlight under Reduce Motion. Used by `PickerRow(pulse:)` on the Log screen
+- `PickerRow` (in `Views/Log/`) — the inline-expanding Source picker used by Log, Shot edit and bulk edit. Optional `extraChoices` (non-model rows such as "None" / "Keep current") sit above the options, the current choice gets a checkmark, `addLabel` + `onAdd` append a "+ New …" row (and make an empty row open the add form directly), `unset` styles a missing value (accent text, dashed "+" badge in place of the photo) and `pulse` adds `PSAttentionGlow`
+- `GrindSettingField` (in `Views/Log/`) — the free-text Grind Setting row shared by Log and Shot edit
 
 Slider note: `SliderField` (in `Views/Log/`) does its own gesture handling — a UIKit `HorizontalDragRecognizer` hosted in a transparent `UIViewRepresentable` overlay maps drag x-position to a stepped, clamped value. There is no hidden `Slider` underneath; the visible thumb is the only thing that exists. The readout always shows the real bound value even when it lies outside the slider range (only the thumb is pinned), and the track is exposed to VoiceOver as an adjustable element.
 
@@ -536,6 +557,7 @@ Layout (top to bottom):
 3. Identity card — Built by, Contact, GitHub (tappable `Link`), **Temperature** (Celsius/Fahrenheit `TempUnitSwitch`), **Appearance** (System/Light/Dark `ModeSwitch`)
 4. Tip jar (see below)
 5. Tagline footer on `surfaceAlt`
+6. **Your data** — Export shots, then Wipe Data at the very bottom (§10.3)
 
 ### 10.1 In-App Purchase — Tip Jar
 
@@ -555,6 +577,28 @@ State persistence: on a verified purchase, `AppSettings.hasTipped` flips true. T
 ### 10.2 Local StoreKit testing
 
 `Resources/PullState.storekit` defines the product locally so the purchase sheet works in the Simulator without setting it up in App Store Connect. The shared **Pull State** scheme references it (Run → Options → StoreKit Configuration), so it is active for every Debug run out of the box. Archives ignore it; when the live product exists in App Store Connect with the same ID, the live store takes over automatically — no code change.
+
+### 10.3 Your data — export and wipe
+
+A `PSSection("Your data")` at the very bottom of the sheet, below the tagline footer.
+
+**Export shots** — a card (tablecells icon, "Export shots", "N shots as a CSV table for Excel, Numbers or Sheets.", share icon) that is a `ShareLink`; disabled with "No shots to export yet." when the history is empty. The share sheet offers Save to Files, AirDrop, Mail, etc.; the suggested file name is `PullState-Shots-YYYY-MM-DD.csv`. The `ShareLink` item is `ShotCSVExport` (`Utilities/ShotCSV.swift`), a `Transferable` that carries only the `ModelContainer` and the temperature unit and builds the file on the main actor when the share sheet asks for it, so opening About never walks the history. Format (`ShotCSV`, unit-tested):
+
+- RFC 4180: comma-separated, fields containing a comma, quote or line break are quoted with inner quotes doubled, CRLF line endings; a UTF-8 byte-order mark first so Excel on Windows reads accents and "°" correctly
+- One header row, then one row per shot, **oldest first**. Columns: Date (`yyyy-MM-dd HH:mm`, POSIX/Gregorian, device time zone), Bean, Bag #, Roaster, Machine, Grinder, Grind, Dose (g), Yield (g), Ratio (1:x), Water Temp (°C or °F — the user's chosen unit, named in the header), Pre-Infusion Pressure (bar), Pre-Infusion Time (s), Pull Pressure (bar), Pull Time (s), Extraction, Tasting Notes (`; `-separated), Rating, Paper Filter (Yes/No), Notes. Numbers use a `.` decimal point (one decimal, ratio two)
+- Missing values are empty cells: no bean / machine / grinder, no extraction, a zero dose (no ratio), and **unrated shots (rating 0) leave Rating blank** rather than "0"
+- Free-text cells that start like a spreadsheet formula (`=`, `+`, `-`, `@`, tab) get a leading apostrophe, so a note such as "-1 step finer" stays text (Excel hides the apostrophe) and nothing in a note can run as a formula
+- Photos are not exported
+
+**Wipe Data** — a red-outlined button. Tapping it opens a `confirmationDialog` *"Wipe data — Choose what to delete. You'll be asked to confirm twice before anything is removed."* with three destructive choices (`WipeScope`, `Utilities/DataWiper.swift`):
+
+| Choice | Deletes | Keeps |
+|---|---|---|
+| **Shots only** | every shot and shot photo | beans, recipes, hardware, settings, bag counter |
+| **Shots, beans & hardware** | all shots, beans (with recipes and photos) and hardware | settings; `nextBagNumber` restarts at 1 |
+| **Everything (full reset)** | all of the above, and every setting back to first-launch values (appearance System, °C, recipe suggestions on, tip state cleared — re-derived from StoreKit next time About opens) | nothing; `hasCompletedOnboarding` flips off and the app returns to onboarding |
+
+Two alerts follow in a row: first a scope-specific one ("Delete all shots?" / "Delete shots, beans & hardware?" / "Reset everything?") whose message states the counts and ends "Export your shots first if you want a copy." — **Cancel** / **Continue**; then *"Are you sure? This can't be undone."* — **Cancel** / **Wipe Shots** · **Wipe Data** · **Reset Everything**. Each dialog is presented ~0.45 s after the previous one closes so presentations never collide. Models are fetched and deleted one by one (not a batch delete) so relationship rules run and external-storage photos are removed with them. A partial wipe leaves the sheet open with "Shot history wiped." / "Shots, beans and hardware wiped." under the button; a full reset closes the sheet first and wipes a moment later, so the switch to onboarding never happens under an open sheet.
 
 ---
 
@@ -711,6 +755,7 @@ Pull State is local-only by design. No accounts, no backend, no network requests
 - **Storage** — SwiftData store lives in the app's default Application Support directory (no App Group, no shared container). Photos use `@Attribute(.externalStorage)` so blobs live in the protected subdirectory rather than inline in the SQLite file. No `UserDefaults` writes anywhere — `AppSettings` is a SwiftData `@Model`.
 - **No File Sharing surfaces** — `UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace` are absent. The app sandbox is not exposed via Files or iTunes File Sharing.
 - **No ATS exceptions** — `NSAppTransportSecurity` is not set. The app makes zero network requests, so any ATS exception would be a smell.
+- **Export is user-initiated** — About → Export shots hands a CSV file to the system share sheet (§10.3). Pull State itself sends nothing anywhere; where the file goes (Files, AirDrop, Mail, …) is the user's choice. Photos are never included. `docs/privacy.html` says the same.
 - **StoreKit verification** — `Utilities/StoreManager.swift` switches on `VerificationResult` for both purchase and restore; unverified transactions are explicitly discarded. Restore uses `Transaction.currentEntitlements` (not a local flag). `AppSettings.hasTipped` is a UI cache that's re-derived from `currentEntitlements` on every About-sheet appear — never the source of truth.
 - **No logging** — there are zero `print` / `NSLog` / `os.Logger` / `debugPrint` calls in the codebase. If logging is ever introduced, gate it behind `#if DEBUG` and keep user content (bean names, notes, ratings, transaction data, photo bytes, sandbox paths) out of the log entirely.
 - **Repo hygiene** — `SECURITY.md` at the repo root documents the disclosure path. `.gitignore` covers `.DS_Store`, `xcuserdata/`, `*.xcuserstate`, `DerivedData/`, `*.p8` / `*.p12` / `AuthKey_*.p8`, `*.cer`, `*.mobileprovision`. `prompts/` and `.claude/` stay gitignored; `CLAUDE.md` is committed as the project's agent instructions.
@@ -725,13 +770,12 @@ Per `CLAUDE.md`, **not** in v1 — do not implement until explicitly scoped:
 
 - Barcode / QR scanning for bean bags
 - AI shot diagnosis ("why was this sour?")
-- CSV export of shot history
 - iCloud sync (currently local only)
 - Home Screen widget
 - Share-shot-as-image card
 - Rating trend charts beyond the per-bean sparkline
 
-These are deliberate omissions, not unbuilt features. The data model and architecture leave room for each: `Shot` already stores everything needed for export; `Bean.ratingTrend` is the seed for richer charts; the on-device-only model is what makes iCloud sync a v2 add rather than a refactor.
+These are deliberate omissions, not unbuilt features. The data model and architecture leave room for each: `Bean.ratingTrend` is the seed for richer charts; the on-device-only model is what makes iCloud sync a v2 add rather than a refactor. (CSV export of shot history was on this list until it was requested for 1.5; it now lives on the About sheet, §10.3.)
 
 ---
 
@@ -756,6 +800,9 @@ Pull State/
 │   ├── SeedData.swift             (creates AppSettings singleton)
 │   ├── StoreManager.swift         (StoreKit 2, Transaction.updates listener, entitlement restore)
 │   ├── RecipePromptEvaluator.swift (pure Save/Adjust-recipe rules + apply strategies)
+│   ├── ShotReassignment.swift     (bulk/single re-filing of shots, "Unknown" clean-up, hardware backfill)
+│   ├── ShotCSV.swift              (CSV export format + the ShareLink Transferable)
+│   ├── DataWiper.swift            (WipeScope + About → Wipe Data)
 │   ├── PSThumbnailCache.swift     (off-main ImageIO downsampling + NSCache)
 │   ├── HardwareCatalog.swift      (machines + grinders for the combobox)
 │   ├── SwipeBackFix.swift         (UINavigationController gesture delegate)
@@ -763,15 +810,15 @@ Pull State/
 └── Views/
     ├── RootView.swift             (onboarding ↔ main switch)
     ├── MainTabView.swift          (NavigationStack, NavRoute, sheets, env injection)
-    ├── Components/                (palette-aware reusable views; PSSection, PSPhotoSourceMenu, PSEditablePhotoHeader, PSPhotoThumb, PSPhotoCropSheet)
-    ├── Log/                       (LogScreen, DualTrackTimer, SliderField, PickerRow)
-    ├── History/                   (HistoryScreen, ShotCard, ShotDetailView, FilterSheet, SortSheet)
+    ├── Components/                (palette-aware reusable views; PSSection, PSPhotoSourceMenu, PSEditablePhotoHeader, PSPhotoThumb, PSPhotoCropSheet, PSAttentionGlow)
+    ├── Log/                       (LogScreen, DualTrackTimer, SliderField, PickerRow, GrindSettingField)
+    ├── History/                   (HistoryScreen, ShotCard, ShotDetailView, ShotBulkEditSheet, FilterSheet, SortSheet)
     ├── Beans/                     (BeansScreen, BeanDetailView, BeanAddForm, RecipeRows, RecipeBlock, RecipeSheet, RatingChart)
     ├── Hardware/                  (HardwareScreen, HardwareDetailView, HardwareAddForm)
     ├── About/                     (AboutSheet — also defines ModeSwitch + TempUnitSwitch)
     └── Onboarding/                (OnboardingFlow + 4 step views; OnbCombobox/OnbField in OnbHardwareStep)
 
-Pull StateTests/                   (Swift Testing: recipe-prompt rules, Recipe codable, temperature conversion, catalog, formatters, model helpers)
+Pull StateTests/                   (Swift Testing: recipe-prompt rules, Recipe codable, temperature conversion, catalog, formatters, model helpers, CSV export, shot re-filing + "Unknown" clean-up + backfill and every wipe scope against an in-memory SwiftData store)
 ```
 
 Asset catalog: `Assets.xcassets/badc0ffe-logo.imageset/` (sourced from `branding/badc0ffe-logo.png`) — used by the About sheet header.

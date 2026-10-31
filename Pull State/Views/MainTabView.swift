@@ -82,13 +82,13 @@ struct MainTabView: View {
                 .presentationBackground(palette.surface)
         }
         .sheet(isPresented: $showAddBean) {
-            BeanAddForm(settings: settings, onCancel: { showAddBean = false }, onSaved: { showAddBean = false })
+            BeanAddForm(settings: settings, onCancel: { showAddBean = false }, onSaved: { _ in showAddBean = false })
                 .environment(\.psPalette, palette)
                 .environment(\.psTempUnit, settings.temperatureUnit)
                 .presentationBackground(palette.page)
         }
         .sheet(item: $addHardwareKind) { kind in
-            HardwareAddForm(kind: kind, onCancel: { addHardwareKind = nil }, onSaved: { addHardwareKind = nil })
+            HardwareAddForm(kind: kind, onCancel: { addHardwareKind = nil }, onSaved: { _ in addHardwareKind = nil })
                 .environment(\.psPalette, palette)
                 .environment(\.psTempUnit, settings.temperatureUnit)
                 .presentationBackground(palette.page)

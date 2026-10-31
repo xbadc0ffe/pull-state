@@ -1,6 +1,12 @@
 import SwiftUI
 import SwiftData
 
+/// One shot, read-only or in edit mode. Edit mode is how a shot logged
+/// without full setup gets fixed up later: the Source pickers set or change
+/// the machine, grinder and bean (machine/grinder also offer "None", and each
+/// list ends in "+ New …" which opens the add form and selects the result).
+/// Moving a shot off an auto-created "Unknown" bean deletes that bean once it
+/// has no shots left (`ShotReassignment.removeEmptyPlaceholders`).
 struct ShotDetailView: View {
     let shotID: PersistentIdentifier
     @Environment(\.modelContext) private var context
@@ -11,10 +17,13 @@ struct ShotDetailView: View {
     @Query private var shots: [Shot]
     @Query(sort: \Bean.bagNumber, order: .reverse) private var beans: [Bean]
     @Query(sort: \Equipment.createdAt) private var equipment: [Equipment]
+    @Query private var settingsQuery: [AppSettings]
     private var shot: Shot? { shots.first }
 
     @State private var editing = false
     @State private var showDeleteConfirm = false
+    @State private var showAddBean = false
+    @State private var addHardwareKind: EquipmentKind? = nil
 
     // Edit-mode draft
     @State private var dDate: Date = .now
@@ -34,6 +43,7 @@ struct ShotDetailView: View {
     @State private var dGrinderID: PersistentIdentifier? = nil
     @State private var dPhotoData: Data? = nil
     @State private var dPaperFilter: Bool = false
+    @State private var dGrind: String = ""
 
     init(shotID: PersistentIdentifier) {
         self.shotID = shotID
@@ -105,6 +115,38 @@ struct ShotDetailView: View {
         } message: {
             Text("This shot will be permanently removed.")
         }
+        .sheet(isPresented: $showAddBean) {
+            if let settings = settingsQuery.first {
+                BeanAddForm(
+                    settings: settings,
+                    onCancel: { showAddBean = false },
+                    onSaved: { bean in
+                        showAddBean = false
+                        dBeanID = bean.persistentModelID
+                    }
+                )
+                .environment(\.psPalette, palette)
+                .environment(\.psTempUnit, tempUnit)
+                .presentationBackground(palette.page)
+            }
+        }
+        .sheet(item: $addHardwareKind) { kind in
+            HardwareAddForm(
+                kind: kind,
+                onCancel: { addHardwareKind = nil },
+                onSaved: { item in
+                    addHardwareKind = nil
+                    if item.kind == .machine {
+                        dMachineID = item.persistentModelID
+                    } else {
+                        dGrinderID = item.persistentModelID
+                    }
+                }
+            )
+            .environment(\.psPalette, palette)
+            .environment(\.psTempUnit, tempUnit)
+            .presentationBackground(palette.page)
+        }
     }
 
     // MARK: - Body content
@@ -116,11 +158,13 @@ struct ShotDetailView: View {
                 photoView(for: shot)
 
                 HStack(alignment: .firstTextBaseline) {
-                    PSDisplay(shot.bean?.name ?? "Unknown", size: 24)
+                    PSDisplay(shot.bean?.name ?? Bean.unknownName, size: 24)
                     Spacer()
-                    Text("#\(shot.bean?.bagNumber ?? 0)")
-                        .font(PSFont.mono(12))
-                        .foregroundStyle(palette.inkMuted)
+                    if let bag = shot.bean?.bagNumber {
+                        Text("#\(bag)")
+                            .font(PSFont.mono(12))
+                            .foregroundStyle(palette.inkMuted)
+                    }
                 }
                 HStack(spacing: 10) {
                     if editing {
@@ -223,6 +267,10 @@ struct ShotDetailView: View {
 
     // MARK: - Edit-mode subviews
 
+    private var draftMachine: Equipment? { machines.first(where: { $0.persistentModelID == dMachineID }) }
+    private var draftGrinder: Equipment? { grinders.first(where: { $0.persistentModelID == dGrinderID }) }
+    private var draftBean: Bean? { beans.first(where: { $0.persistentModelID == dBeanID }) }
+
     @ViewBuilder
     private var sourcePickers: some View {
         PSSection("Source") {
@@ -230,28 +278,39 @@ struct ShotDetailView: View {
                 VStack(spacing: 0) {
                     PickerRow(
                         label: "Machine",
-                        value: machines.first(where: { $0.persistentModelID == dMachineID })?.name ?? "—",
-                        sub: machines.first(where: { $0.persistentModelID == dMachineID })?.brand,
+                        value: draftMachine?.name ?? "Not set",
+                        sub: draftMachine?.brand,
                         options: machines.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.brand) },
-                        selectedID: dMachineID,
-                        onPick: { dMachineID = $0 }
+                        selectedID: draftMachine?.persistentModelID,
+                        onPick: { dMachineID = $0 },
+                        extraChoices: [PickerExtraChoice(label: "None", selected: draftMachine == nil, action: { dMachineID = nil })],
+                        addLabel: "New machine",
+                        onAdd: { addHardwareKind = .machine },
+                        unset: draftMachine == nil
                     )
                     PickerRow(
                         label: "Grinder",
-                        value: grinders.first(where: { $0.persistentModelID == dGrinderID })?.name ?? "—",
-                        sub: grinders.first(where: { $0.persistentModelID == dGrinderID })?.brand,
+                        value: draftGrinder?.name ?? "Not set",
+                        sub: draftGrinder?.brand,
                         options: grinders.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.brand) },
-                        selectedID: dGrinderID,
-                        onPick: { dGrinderID = $0 }
+                        selectedID: draftGrinder?.persistentModelID,
+                        onPick: { dGrinderID = $0 },
+                        extraChoices: [PickerExtraChoice(label: "None", selected: draftGrinder == nil, action: { dGrinderID = nil })],
+                        addLabel: "New grinder",
+                        onAdd: { addHardwareKind = .grinder },
+                        unset: draftGrinder == nil
                     )
                     PickerRow(
                         label: "Beans",
-                        value: beans.first(where: { $0.persistentModelID == dBeanID })?.name ?? "—",
-                        sub: beans.first(where: { $0.persistentModelID == dBeanID }).map { "\($0.roaster) · #\($0.bagNumber)" },
-                        options: beans.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: "\($0.roaster) · #\($0.bagNumber)") },
-                        selectedID: dBeanID,
+                        value: draftBean?.name ?? "Not set",
+                        sub: draftBean?.pickerSubtitle,
+                        options: beans.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.pickerSubtitle) },
+                        selectedID: draftBean?.persistentModelID,
                         onPick: { dBeanID = $0 },
-                        last: true
+                        last: true,
+                        addLabel: "New bean",
+                        onAdd: { showAddBean = true },
+                        unset: draftBean == nil
                     )
                 }
             }
@@ -300,6 +359,7 @@ struct ShotDetailView: View {
         PSSection("Settings") {
             PSCard {
                 VStack(spacing: 0) {
+                    GrindSettingField(text: $dGrind)
                     SliderField(label: "Dose", value: $dDose, range: 7...25, step: 0.1, unit: "g", decimals: 1)
                     SliderField(label: "Yield", value: $dYield, range: 7...75, step: 0.1, unit: "g", decimals: 1)
                     SliderField(
@@ -424,10 +484,13 @@ struct ShotDetailView: View {
         dGrinderID = shot.grinder?.persistentModelID
         dPhotoData = shot.photoData
         dPaperFilter = shot.usedPaperFilter
+        dGrind = shot.grindSetting
     }
 
     private func commitEdit(into shot: Shot) {
+        let previousBean = shot.bean
         shot.date = dDate
+        shot.grindSetting = dGrind.trimmingCharacters(in: .whitespacesAndNewlines)
         shot.dose = dDose
         shot.yield = dYield
         shot.waterTemp = dWaterTemp
@@ -439,11 +502,15 @@ struct ShotDetailView: View {
         shot.notes = dNotes
         shot.extraction = dExtraction
         shot.tags = Array(dTags)
-        shot.bean = beans.first(where: { $0.persistentModelID == dBeanID })
-        shot.machine = machines.first(where: { $0.persistentModelID == dMachineID })
-        shot.grinder = grinders.first(where: { $0.persistentModelID == dGrinderID })
+        // A shot always keeps a bean; only an explicit pick replaces it.
+        if let bean = draftBean { shot.bean = bean }
+        shot.machine = draftMachine
+        shot.grinder = draftGrinder
         shot.photoData = dPhotoData
         shot.usedPaperFilter = dPaperFilter
         try? context.save()
+        if let previousBean, previousBean.persistentModelID != shot.bean?.persistentModelID {
+            ShotReassignment.removeEmptyPlaceholders([previousBean], in: context)
+        }
     }
 }

@@ -5,10 +5,16 @@ import SwiftData
 /// filter sheet (extraction, tasting tags AND-matched, min rating, bean,
 /// machine, grinder), and a sort sheet. Empty state renders when no shots
 /// exist; "no shots match" renders when filters exclude everything.
+///
+/// "Select" in the nav bar switches to Select mode: tapping a card ticks it
+/// instead of opening it, and "Edit N shots" opens `ShotBulkEditSheet` to
+/// change the bean / machine / grinder of every ticked shot that is still
+/// visible under the current filters.
 struct HistoryScreen: View {
     let onShowAbout: () -> Void
 
     @Environment(\.psPalette) private var palette
+    @Environment(\.psTempUnit) private var tempUnit
     @Environment(\.modelContext) private var context
 
     @Query(sort: \Shot.date, order: .reverse) private var shots: [Shot]
@@ -25,8 +31,21 @@ struct HistoryScreen: View {
     @State private var filterPaper: Bool? = nil
     @State private var showFilter = false
     @State private var showSort = false
+    @State private var selecting = false
+    @State private var selection: Set<PersistentIdentifier> = []
+    @State private var showBulkEdit = false
 
     private var totalShots: Int { shots.count }
+
+    /// Ticked shots still visible under the current filters — what the bulk
+    /// edit applies to.
+    private var selectedShots: [Shot] {
+        filtered.filter { selection.contains($0.persistentModelID) }
+    }
+
+    private var allVisibleSelected: Bool {
+        !filtered.isEmpty && selectedShots.count == filtered.count
+    }
     private var totalGrams: Double { shots.reduce(0) { $0 + $1.yield } }
     /// Average over rated shots only; unrated (0) shots are not "zero stars".
     private var avgRating: String {
@@ -82,7 +101,17 @@ struct HistoryScreen: View {
             ) {
                 EmptyView()
             } trailing: {
-                PSIconBtn(systemName: "ellipsis", label: "More", action: onShowAbout)
+                HStack(spacing: 10) {
+                    if !shots.isEmpty {
+                        Button(selecting ? "Done" : "Select") {
+                            if selecting { endSelecting() } else { selecting = true }
+                        }
+                        .font(PSFont.body(14, weight: .semibold))
+                        .foregroundStyle(palette.accent)
+                        .buttonStyle(.plain)
+                    }
+                    PSIconBtn(systemName: "ellipsis", label: "More", action: onShowAbout)
+                }
             }
             .psContentColumn()
 
@@ -99,15 +128,22 @@ struct HistoryScreen: View {
                         .padding(.bottom, 14)
 
                         HStack(spacing: 8) {
+                            if selecting {
+                                IconChip(systemName: allVisibleSelected ? "circle" : "checkmark.circle",
+                                         label: allVisibleSelected ? "Select None" : "Select All",
+                                         action: toggleSelectAll)
+                            }
                             IconChip(systemName: "line.3.horizontal.decrease",
                                      label: "Filter",
                                      badge: filterCount > 0 ? filterCount : nil,
                                      action: { showFilter = true })
-                            IconChip(systemName: "arrow.up.arrow.down",
-                                     label: sortBy.label,
-                                     action: { showSort = true })
+                            if !selecting {
+                                IconChip(systemName: "arrow.up.arrow.down",
+                                         label: sortBy.label,
+                                         action: { showSort = true })
+                            }
                             Spacer()
-                            Text("\(filtered.count) / \(totalShots)")
+                            Text(selecting ? "\(selectedShots.count) selected" : "\(filtered.count) / \(totalShots)")
                                 .font(PSFont.mono(10))
                                 .tracking(0.6)
                                 .foregroundStyle(palette.inkMuted)
@@ -123,10 +159,19 @@ struct HistoryScreen: View {
                         } else {
                             VStack(spacing: 10) {
                                 ForEach(filtered) { shot in
-                                    NavigationLink(value: NavRoute.shot(shot.persistentModelID)) {
-                                        ShotCard(shot: shot)
+                                    if selecting {
+                                        let isSelected = selection.contains(shot.persistentModelID)
+                                        Button { toggle(shot) } label: {
+                                            ShotCard(shot: shot, selected: isSelected)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                                    } else {
+                                        NavigationLink(value: NavRoute.shot(shot.persistentModelID)) {
+                                            ShotCard(shot: shot)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                         }
@@ -136,9 +181,41 @@ struct HistoryScreen: View {
                     .psContentColumn()
                 }
                 .scrollIndicators(.hidden)
+
+                if selecting {
+                    bulkEditBar
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: shots.isEmpty) { _, empty in
+            if empty { endSelecting() }
+        }
+        // Drop filters that point at a bean or hardware item that no longer
+        // exists (deleted, wiped, or an "Unknown" placeholder tidied away);
+        // otherwise the list would silently stay empty.
+        .onChange(of: beans.map(\.persistentModelID)) { _, ids in
+            if let id = filterBeanID, !ids.contains(id) { filterBeanID = nil }
+        }
+        .onChange(of: equipment.map(\.persistentModelID)) { _, ids in
+            if let id = filterMachineID, !ids.contains(id) { filterMachineID = nil }
+            if let id = filterGrinderID, !ids.contains(id) { filterGrinderID = nil }
+        }
+        .sheet(isPresented: $showBulkEdit) {
+            ShotBulkEditSheet(
+                shots: selectedShots,
+                onClose: { showBulkEdit = false },
+                onApplied: {
+                    showBulkEdit = false
+                    endSelecting()
+                }
+            )
+            .environment(\.psPalette, palette)
+            .environment(\.psTempUnit, tempUnit)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(palette.surface)
+        }
         .sheet(isPresented: $showFilter) {
             FilterSheet(
                 filterEx: $filterEx,
@@ -154,6 +231,7 @@ struct HistoryScreen: View {
                 onClose: { showFilter = false }
             )
             .environment(\.psPalette, palette)
+            .environment(\.psTempUnit, tempUnit)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationBackground(palette.surface)
@@ -161,10 +239,52 @@ struct HistoryScreen: View {
         .sheet(isPresented: $showSort) {
             SortSheet(sortBy: $sortBy, onClose: { showSort = false })
                 .environment(\.psPalette, palette)
+                .environment(\.psTempUnit, tempUnit)
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(palette.surface)
         }
+    }
+
+    /// Bottom bar in Select mode; disabled until at least one visible shot
+    /// is ticked.
+    private var bulkEditBar: some View {
+        let count = selectedShots.count
+        return Button { showBulkEdit = true } label: {
+            Text(count == 0 ? "Tap shots to select them" : "Edit \(count) shot\(count == 1 ? "" : "s")")
+                .font(PSFont.body(15, weight: .bold))
+                .tracking(0.4)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(count == 0 ? palette.inkMuted : palette.accent,
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .psShadow(strong: count > 0)
+        }
+        .buttonStyle(.plain)
+        .disabled(count == 0)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .psContentColumn()
+    }
+
+    private func toggle(_ shot: Shot) {
+        let id = shot.persistentModelID
+        if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
+    }
+
+    private func toggleSelectAll() {
+        let visible = Set(filtered.map(\.persistentModelID))
+        if allVisibleSelected {
+            selection.subtract(visible)
+        } else {
+            selection.formUnion(visible)
+        }
+    }
+
+    private func endSelecting() {
+        selecting = false
+        selection = []
     }
 
     @ViewBuilder

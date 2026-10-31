@@ -44,12 +44,12 @@ pull-state/
 | `Pull_StateApp.swift` | `@main`; builds the `ModelContainer`, installs `SelectAllOnFocus` |
 | `Models/` | SwiftData `@Model`s: `Shot`, `Bean`, `Equipment`, `AppSettings`; value types `Recipe`, `BeanRatingPoint`; enums |
 | `Resources/` | `Theme.swift` (palette, fonts, formatters, env keys), `PullState.storekit` |
-| `Utilities/` | `StoreManager` (StoreKit 2), `RecipePromptEvaluator` (pure prompt rules), `PSThumbnailCache`, `SeedData`, `HardwareCatalog`, `SwipeBackFix`, `SelectAllOnFocus` |
+| `Utilities/` | `StoreManager` (StoreKit 2), `RecipePromptEvaluator` (pure prompt rules), `ShotReassignment` (re-filing shots, "Unknown" clean-up, hardware backfill), `ShotCSV` (CSV export), `DataWiper` (Wipe Data scopes), `PSThumbnailCache`, `SeedData`, `HardwareCatalog`, `SwipeBackFix`, `SelectAllOnFocus` |
 | `Views/RootView.swift` | onboarding ↔ main switch, applies colour scheme |
 | `Views/MainTabView.swift` | the single `NavigationStack`, `NavRoute`, tab switch, About/Add sheets |
-| `Views/Components/` | `PS*` design-system views (card, field, pill, stars, nav bar, tab bar, photo picker/crop/thumb, toggle, layout) |
-| `Views/Log/` | Log tab: `LogScreen`, `DualTrackTimer`, `SliderField`, `PickerRow` |
-| `Views/History/` | History tab, `ShotCard`, `ShotDetailView`, filter + sort sheets |
+| `Views/Components/` | `PS*` design-system views (card, field, pill, stars, nav bar, tab bar, photo picker/crop/thumb, toggle, attention glow, layout) |
+| `Views/Log/` | Log tab: `LogScreen`, `DualTrackTimer`, `SliderField`, `PickerRow`, `GrindSettingField` |
+| `Views/History/` | History tab (with Select mode), `ShotCard`, `ShotDetailView`, `ShotBulkEditSheet`, filter + sort sheets |
 | `Views/Beans/` | Beans tab, `BeanDetailView`, `BeanAddForm`, `RecipeRows` (shared), `RecipeBlock`, `RecipeSheet`, `RatingChart` |
 | `Views/Hardware/` | Hardware tab, detail, add form |
 | `Views/Onboarding/` | four-step onboarding; also home of `OnbField` / `OnbCombobox` |
@@ -118,7 +118,7 @@ The shared scheme already selects `PullState.storekit` (Run → Options → Stor
 | 1.2 | Full-width scroll, editable photo headers, paper-filter filter, light/dark icons |
 | 1.3 | Data protection entitlement, pre-infusion pressure, recipe-prompt toggle, slider scroll passthrough |
 | 1.4 | Pre-infusion pressure slider range, pull pressure label, Restore Purchases, version read from bundle |
-| 1.5 | Documentation pass (audit, wiki, CLAUDE.md), then the audit cleanup: Log state survives tab switches, °F recipe fix, notes no longer select-all, downscaled + cached photos, StoreKit transaction listener, Dynamic Type, accessibility, iOS-only build config, Swift 6, unit tests |
+| 1.5 | Documentation pass (audit, wiki, CLAUDE.md), then the audit cleanup: Log state survives tab switches, °F recipe fix, notes no longer select-all, downscaled + cached photos, StoreKit transaction listener, Dynamic Type, accessibility, iOS-only build config, Swift 6, unit tests. Then (30 Oct) logging without setup: Source rows always shown and pulsing until set up, "+ New …" in every picker, hardware optional, bean named at save time (blank = "Unknown"); re-filing shots later (Shot edit with None / + New / grind, History Select → bulk edit, backfill offer when hardware is added, empty "Unknown" bean tidied away); About → Export shots (CSV) and Wipe Data (three scopes, double confirmation) |
 
 ---
 
@@ -131,6 +131,10 @@ The shared scheme already selects `PullState.storekit` (Run → Options → Stor
 | Add a recipe field | `Models/Recipe.swift` (CodingKeys + decodeIfPresent), `RecipeBlock` + `RecipeSheet` (rows from `RecipeRows.swift`), preload in `LogScreen.preloadFromBean` |
 | Tweak colours or type | `Resources/Theme.swift` |
 | Timer behaviour | `LogScreen` state machine + `DualTrackTimer` (DESIGN.md §6) |
+| Saving with no setup, the bean-name prompt | `LogScreen.save` / `saveWithQuickBean`, `Bean.quickAdd` (DESIGN.md §3.1) |
+| Moving shots between beans / hardware | `Utilities/ShotReassignment.swift`, `ShotDetailView` edit mode, `ShotBulkEditSheet`, `HardwareAddForm` backfill (DESIGN.md §3.2, §3.4) |
+| CSV export columns / format | `Utilities/ShotCSV.swift` (tests in `ShotCSVTests`; DESIGN.md §10.3) |
+| Wipe Data | `Utilities/DataWiper.swift`, `AboutSheet` "Your data" (DESIGN.md §10.3) |
 | Hardware autocomplete list | `Utilities/HardwareCatalog.swift` |
 | IAP | `Utilities/StoreManager.swift`, `AboutSheet`, `PullState.storekit` |
 | Privacy / App Store compliance | `PrivacyInfo.xcprivacy`, entitlements, `INFOPLIST_KEY_*` in pbxproj, `docs/privacy.html` |
@@ -140,4 +144,4 @@ The shared scheme already selects `PullState.storekit` (Run → Options → Stor
 
 ## 8. Deferred (V2) — do not build without scoping
 
-Barcode scanning, AI shot diagnosis, CSV export, iCloud sync, Home Screen widget, share-as-image, cross-bean charts. See DESIGN.md §17.
+Barcode scanning, AI shot diagnosis, iCloud sync, Home Screen widget, share-as-image, cross-bean charts. See DESIGN.md §17. (CSV export shipped in 1.5.)

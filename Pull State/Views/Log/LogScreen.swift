@@ -10,6 +10,11 @@ import UIKit
 /// in `RecipePromptEvaluator`; see DESIGN.md §3.1. The screen stays mounted
 /// while other tabs are shown (see `MainTabView`), so a running timer and a
 /// half-written shot survive tab switches.
+///
+/// No setup is required: a shot saves without a machine or grinder, and if
+/// no bean exists yet Save asks for a name (blank = "Unknown") and creates
+/// the bean on the spot. Gear that isn't set up pulses in the Source card;
+/// tapping it opens the matching add form.
 struct LogScreen: View {
     let onShowAbout: () -> Void
 
@@ -53,6 +58,10 @@ struct LogScreen: View {
     @State private var savedFlash: Bool = false
     @State private var showRecipeSheet: Bool = false
     @State private var recipePrompt: RecipePrompt? = nil
+    @State private var showBeanNamePrompt: Bool = false
+    @State private var quickBeanName: String = ""
+    @State private var showAddBean: Bool = false
+    @State private var addHardwareKind: EquipmentKind? = nil
 
     private var machines: [Equipment] { allEquipment.filter { $0.kind == .machine } }
     private var grinders: [Equipment] { allEquipment.filter { $0.kind == .grinder } }
@@ -137,7 +146,10 @@ struct LogScreen: View {
             }
             preloadFromBean()
         }
-        .onChange(of: beanID) { _, _ in
+        // Watches the effective bean, not just `beanID`: when the selected
+        // bean disappears (deleted, or a placeholder tidied away) the picker
+        // falls back to another bean, and its recipe should load too.
+        .onChange(of: selectedBean?.persistentModelID) { _, _ in
             preloadFromBean()
         }
         .sheet(isPresented: $showRecipeSheet) {
@@ -149,6 +161,38 @@ struct LogScreen: View {
                     .presentationDragIndicator(.visible)
                     .presentationBackground(palette.surface)
             }
+        }
+        .sheet(isPresented: $showAddBean) {
+            if let settings {
+                BeanAddForm(
+                    settings: settings,
+                    onCancel: { showAddBean = false },
+                    onSaved: { bean in
+                        showAddBean = false
+                        beanID = bean.persistentModelID
+                    }
+                )
+                .environment(\.psPalette, palette)
+                .environment(\.psTempUnit, tempUnit)
+                .presentationBackground(palette.page)
+            }
+        }
+        .sheet(item: $addHardwareKind) { kind in
+            HardwareAddForm(
+                kind: kind,
+                onCancel: { addHardwareKind = nil },
+                onSaved: { item in
+                    addHardwareKind = nil
+                    if item.kind == .machine {
+                        machineID = item.persistentModelID
+                    } else {
+                        grinderID = item.persistentModelID
+                    }
+                }
+            )
+            .environment(\.psPalette, palette)
+            .environment(\.psTempUnit, tempUnit)
+            .presentationBackground(palette.page)
         }
         .alert(
             recipePromptTitle,
@@ -198,76 +242,76 @@ struct LogScreen: View {
 
     // MARK: - Sections
 
+    /// Machine, grinder and bean pickers. Always shown: a row with nothing
+    /// set up yet reads "Not set", pulses, and opens the add form when
+    /// tapped; every list also ends in a "+ New …" row.
     @ViewBuilder
     private var sourceSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             PSSectionLabel("Source").padding(.leading, 4)
-            if machines.isEmpty || grinders.isEmpty || beans.isEmpty {
-                PSCard {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Set up your gear first")
-                            .font(PSFont.body(13, weight: .semibold))
-                            .foregroundStyle(palette.ink)
-                        Text("Add at least one bean (Beans tab), one machine, and one grinder (Hardware tab) before logging a shot.")
-                            .font(PSFont.body(12))
-                            .foregroundStyle(palette.inkSoft)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
+            PSCard {
+                VStack(spacing: 0) {
+                    PickerRow(
+                        label: "Machine",
+                        value: selectedMachine?.name ?? "Not set",
+                        sub: selectedMachine?.brand ?? "Tap to add your machine",
+                        options: machines.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.brand, photoData: $0.photoData) },
+                        selectedID: selectedMachine?.persistentModelID,
+                        onPick: { machineID = $0 },
+                        photoData: selectedMachine?.photoData,
+                        showThumbnails: true,
+                        addLabel: "New machine",
+                        onAdd: { addHardwareKind = .machine },
+                        unset: selectedMachine == nil,
+                        pulse: selectedMachine == nil
+                    )
+                    PickerRow(
+                        label: "Grinder",
+                        value: selectedGrinder?.name ?? "Not set",
+                        sub: selectedGrinder?.brand ?? "Tap to add your grinder",
+                        options: grinders.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.brand, photoData: $0.photoData) },
+                        selectedID: selectedGrinder?.persistentModelID,
+                        onPick: { grinderID = $0 },
+                        photoData: selectedGrinder?.photoData,
+                        showThumbnails: true,
+                        addLabel: "New grinder",
+                        onAdd: { addHardwareKind = .grinder },
+                        unset: selectedGrinder == nil,
+                        pulse: selectedGrinder == nil
+                    )
+                    PickerRow(
+                        label: "Beans",
+                        value: selectedBean?.name ?? "Not set",
+                        sub: selectedBean?.pickerSubtitle ?? "Tap to add, or name it when you save",
+                        options: beans.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.pickerSubtitle, photoData: $0.photoData) },
+                        selectedID: selectedBean?.persistentModelID,
+                        onPick: { beanID = $0 },
+                        last: true,
+                        photoData: selectedBean?.photoData,
+                        showThumbnails: true,
+                        addLabel: "New bean",
+                        onAdd: { showAddBean = true },
+                        unset: selectedBean == nil,
+                        pulse: selectedBean == nil
+                    )
                 }
-            } else {
-                PSCard {
-                    VStack(spacing: 0) {
-                        PickerRow(
-                            label: "Machine",
-                            value: selectedMachine?.name ?? "—",
-                            sub: selectedMachine?.brand,
-                            options: machines.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.brand, photoData: $0.photoData) },
-                            selectedID: machineID,
-                            onPick: { machineID = $0 },
-                            photoData: selectedMachine?.photoData,
-                            showThumbnails: true
-                        )
-                        PickerRow(
-                            label: "Grinder",
-                            value: selectedGrinder?.name ?? "—",
-                            sub: selectedGrinder?.brand,
-                            options: grinders.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: $0.brand, photoData: $0.photoData) },
-                            selectedID: grinderID,
-                            onPick: { grinderID = $0 },
-                            photoData: selectedGrinder?.photoData,
-                            showThumbnails: true
-                        )
-                        PickerRow(
-                            label: "Beans",
-                            value: selectedBean?.name ?? "—",
-                            sub: selectedBean.map { "\($0.roaster) · #\($0.bagNumber)" },
-                            options: beans.map { PickerOption(id: $0.persistentModelID, label: $0.name, sub: "\($0.roaster) · #\($0.bagNumber)", photoData: $0.photoData) },
-                            selectedID: beanID,
-                            onPick: { beanID = $0 },
-                            last: true,
-                            photoData: selectedBean?.photoData,
-                            showThumbnails: true
-                        )
+            }
+            if selectedBean != nil {
+                Button { showRecipeSheet = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "list.bullet.rectangle")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("View Recipe")
+                            .font(PSFont.body(12, weight: .semibold))
                     }
+                    .foregroundStyle(palette.accentDeep)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(palette.accentSoft, in: Capsule())
+                    .overlay(Capsule().strokeBorder(palette.accent, lineWidth: 0.5))
                 }
-                if selectedBean != nil {
-                    Button { showRecipeSheet = true } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "list.bullet.rectangle")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("View Recipe")
-                                .font(PSFont.body(12, weight: .semibold))
-                        }
-                        .foregroundStyle(palette.accentDeep)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(palette.accentSoft, in: Capsule())
-                        .overlay(Capsule().strokeBorder(palette.accent, lineWidth: 0.5))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.leading, 4)
-                }
+                .buttonStyle(.plain)
+                .padding(.leading, 4)
             }
         }
     }
@@ -333,7 +377,7 @@ struct LogScreen: View {
             PSSectionLabel("Settings").padding(.leading, 4)
             PSCard {
                 VStack(spacing: 0) {
-                    grindField
+                    GrindSettingField(text: $grind)
                     SliderField(label: "Dose / Weight In", value: $dose, range: 7...25, step: 0.1, unit: "g", decimals: 1)
                     SliderField(label: "Yield / Weight Out", value: $yieldG, range: 7...75, step: 0.1, unit: "g", decimals: 1)
                     SliderField(
@@ -351,7 +395,9 @@ struct LogScreen: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 4)
             }
-            if let bean = selectedBean {
+            // Only when there is something to load — a new or quick-added
+            // bean's empty recipe hasn't set any slider.
+            if let bean = selectedBean, !bean.recipe.isEmpty {
                 Text("Loaded from \(bean.name) recipe")
                     .font(PSFont.mono(10))
                     .tracking(0.6)
@@ -359,28 +405,6 @@ struct LogScreen: View {
                     .padding(.leading, 4)
             }
         }
-    }
-
-    @ViewBuilder
-    private var grindField: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("Grind Setting")
-                .font(PSFont.body(13, weight: .medium))
-                .foregroundStyle(palette.inkSoft)
-            Spacer(minLength: 12)
-            TextField("e.g. 22", text: $grind)
-                .font(PSFont.mono(15, weight: .semibold))
-                .foregroundStyle(palette.ink)
-                .multilineTextAlignment(.trailing)
-                .textFieldStyle(.plain)
-        }
-        .padding(.vertical, 12)
-        .overlay(
-            Rectangle()
-                .fill(palette.line)
-                .frame(height: 0.5),
-            alignment: .bottom
-        )
     }
 
     @ViewBuilder
@@ -560,6 +584,8 @@ struct LogScreen: View {
         }
     }
 
+    /// Always enabled — machine and grinder are optional, and a missing bean
+    /// is asked for (and created) by the name prompt attached here.
     @ViewBuilder
     private var saveButton: some View {
         Button(action: save) {
@@ -569,26 +595,38 @@ struct LogScreen: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 17)
-                .background(canSave ? palette.accent : palette.inkMuted, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .psShadow(strong: canSave)
+                .background(palette.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .psShadow(strong: true)
         }
         .buttonStyle(.plain)
-        .disabled(!canSave)
-    }
-
-    private var canSave: Bool {
-        selectedBean != nil && selectedMachine != nil && selectedGrinder != nil
+        .alert("Name this bean", isPresented: $showBeanNamePrompt) {
+            TextField(Bean.unknownName, text: $quickBeanName)
+                .textInputAutocapitalization(.words)
+            Button("Save Shot", action: saveWithQuickBean)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("No beans are set up yet. Enter this coffee's name, or leave it blank to save it as \"\(Bean.unknownName)\". You can add the details on the Beans tab later.")
+        }
     }
 
     // MARK: - Actions
 
-    private func evaluateRecipePrompt(bean: Bean, values: RecipePromptValues, shotRating: Int) {
+    /// `afterAlert` delays the prompt briefly so it doesn't collide with the
+    /// bean-name alert that is still animating away.
+    private func evaluateRecipePrompt(bean: Bean, values: RecipePromptValues, shotRating: Int, afterAlert: Bool) {
         guard settings?.autoRecipePromptEnabled ?? true else { return }
         let bestRating = bean.shots.map(\.rating).max() ?? 0
-        if let kind = RecipePromptEvaluator.evaluate(
+        guard let kind = RecipePromptEvaluator.evaluate(
             recipe: bean.recipe, values: values, shotRating: shotRating, bestRating: bestRating
-        ) {
-            recipePrompt = RecipePrompt(kind: kind, bean: bean, values: values)
+        ) else { return }
+        let prompt = RecipePrompt(kind: kind, bean: bean, values: values)
+        if afterAlert {
+            Task {
+                try? await Task.sleep(for: .milliseconds(450))
+                recipePrompt = prompt
+            }
+        } else {
+            recipePrompt = prompt
         }
     }
 
@@ -678,9 +716,31 @@ struct LogScreen: View {
         stopTicking()
     }
 
+    /// Saves with the selected bean, or — when no bean exists yet — asks for
+    /// a name first (`saveWithQuickBean`).
     private func save() {
-        guard canSave else { return }
-        let bean = selectedBean
+        guard let bean = selectedBean else {
+            quickBeanName = ""
+            showBeanNamePrompt = true
+            return
+        }
+        commitShot(bean: bean, afterAlert: false)
+    }
+
+    /// Creates the bean named in the prompt ("Unknown" when blank) with the
+    /// next bag number, saves the shot against it, and selects it for the
+    /// shots that follow.
+    private func saveWithQuickBean() {
+        let bagNumber = settings?.nextBagNumber ?? 1
+        let bean = Bean.quickAdd(name: quickBeanName, bagNumber: bagNumber)
+        context.insert(bean)
+        settings?.nextBagNumber = bagNumber + 1
+        commitShot(bean: bean, afterAlert: true)
+        // The id is permanent now that commitShot has saved.
+        beanID = bean.persistentModelID
+    }
+
+    private func commitShot(bean: Bean, afterAlert: Bool) {
         let preInfusionUsed = preEnd != nil
         let pullTimeUsed = pullEnd != nil
         let preInfusionSeconds = roundedTenth(preEnd ?? 0)
@@ -724,9 +784,7 @@ struct LogScreen: View {
         context.insert(shot)
         try? context.save()
 
-        if let bean {
-            evaluateRecipePrompt(bean: bean, values: values, shotRating: shotRating)
-        }
+        evaluateRecipePrompt(bean: bean, values: values, shotRating: shotRating, afterAlert: afterAlert)
 
         resetTimer()
         rating = 0
@@ -735,7 +793,7 @@ struct LogScreen: View {
         notes = ""
         photoData = nil
         shotDate = .now
-        grind = selectedBean?.recipe.grind ?? ""
+        grind = bean.recipe.grind ?? ""
 
         savedFlash = true
         Task {

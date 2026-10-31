@@ -3,18 +3,28 @@ import SwiftData
 
 /// About sheet presented from any tab's "…" icon. Houses the identity card
 /// (Built by / Contact / GitHub / Temperature / Appearance switches), the
-/// non-consumable tip-jar IAP, and a footer tagline. The app-wide
-/// `StoreManager` (from the environment) owns the StoreKit state; this sheet
-/// mirrors its `tipEntitled` into `AppSettings.hasTipped`, so a re-installed
-/// user keeps the "tipped" state without re-purchasing.
+/// non-consumable tip-jar IAP, a footer tagline, and — at the very bottom —
+/// "Your data": Export shots (CSV via the share sheet, `ShotCSVExport`) and
+/// Wipe Data (pick a `WipeScope`, then two confirmations in a row). The
+/// app-wide `StoreManager` (from the environment) owns the StoreKit state;
+/// this sheet mirrors its `tipEntitled` into `AppSettings.hasTipped`, so a
+/// re-installed user keeps the "tipped" state without re-purchasing.
 struct AboutSheet: View {
     @Bindable var settings: AppSettings
     @Environment(\.psPalette) private var palette
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(StoreManager.self) private var store
+    @Query private var shots: [Shot]
     @State private var restoreMessage: String?
     @State private var restoreFailed = false
+
+    @State private var showWipeChooser = false
+    @State private var showWipeConfirm = false
+    @State private var showWipeFinal = false
+    @State private var wipeScope: WipeScope? = nil
+    @State private var wipeMessage: String?
+    @State private var wipeFailed = false
 
     var body: some View {
         ScrollView {
@@ -223,12 +233,24 @@ struct AboutSheet: View {
                         .padding(.horizontal, 18)
                 }
 
+                yourDataSection
+                    .padding(.horizontal, 18)
+                    .padding(.top, 26)
+
                 Spacer(minLength: 24)
             }
             .psContentColumn()
         }
         .scrollIndicators(.hidden)
         .background(palette.surface)
+        // `wipeScope` is left set when these close (it is replaced on the
+        // next pick) so the dialogs' text doesn't change while they animate out.
+        .alert("Are you sure?", isPresented: $showWipeFinal) {
+            Button("Cancel", role: .cancel) {}
+            Button(wipeScope?.confirmLabel ?? "Wipe", role: .destructive, action: performWipe)
+        } message: {
+            Text("This can't be undone.")
+        }
         .task {
             await store.loadProductIfNeeded()
             if !settings.hasTipped, await store.hasPriorEntitlement() {
@@ -250,6 +272,179 @@ struct AboutSheet: View {
         guard !settings.hasTipped else { return }
         settings.hasTipped = true
         try? context.save()
+    }
+
+    // MARK: - Your data
+
+    @ViewBuilder
+    private var yourDataSection: some View {
+        PSSection("Your data") {
+            VStack(spacing: 10) {
+                exportCard
+                wipeButton
+                if let wipeMessage {
+                    Text(wipeMessage)
+                        .font(PSFont.body(11))
+                        .foregroundStyle(wipeFailed ? palette.bad : palette.inkSoft)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .alert(wipeConfirmTitle, isPresented: $showWipeConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Continue", role: .destructive) {
+                present { showWipeFinal = true }
+            }
+        } message: {
+            Text(wipeConfirmMessage)
+        }
+    }
+
+    /// Shares the whole history as a CSV file. The file is only built when
+    /// the share sheet asks for it (see `ShotCSVExport`).
+    private var exportCard: some View {
+        ShareLink(
+            item: ShotCSVExport(
+                container: context.container,
+                unitRaw: settings.temperatureUnitRaw,
+                fileName: ShotCSV.fileName(on: .now)
+            ),
+            preview: SharePreview("Pull State shot history", image: Image(systemName: "tablecells"))
+        ) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(palette.accentSoft)
+                        .frame(width: 42, height: 42)
+                    Image(systemName: "tablecells")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(palette.accent)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Export shots")
+                        .font(PSFont.body(14.5, weight: .bold))
+                        .foregroundStyle(palette.ink)
+                    Text(shots.isEmpty
+                         ? "No shots to export yet."
+                         : "\(countLabel(shots.count, "shot")) as a CSV table for Excel, Numbers or Sheets.")
+                        .font(PSFont.body(12))
+                        .foregroundStyle(palette.inkSoft)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(shots.isEmpty ? palette.inkMuted : palette.accent)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(palette.lineStrong, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(shots.isEmpty)
+    }
+
+    private var wipeButton: some View {
+        Button {
+            wipeMessage = nil
+            showWipeChooser = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "trash")
+                Text("Wipe Data")
+            }
+            .font(PSFont.body(13, weight: .bold))
+            .foregroundStyle(palette.bad)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(palette.bad.opacity(0.6), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .confirmationDialog("Wipe data", isPresented: $showWipeChooser, titleVisibility: .visible) {
+            ForEach(WipeScope.allCases) { scope in
+                Button(scope.title, role: .destructive) {
+                    wipeScope = scope
+                    present { showWipeConfirm = true }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Choose what to delete. You'll be asked to confirm twice before anything is removed.")
+        }
+    }
+
+    private var wipeConfirmTitle: String {
+        switch wipeScope {
+        case .shots:      return "Delete all shots?"
+        case .library:    return "Delete shots, beans & hardware?"
+        case .everything: return "Reset everything?"
+        case nil:         return ""
+        }
+    }
+
+    private var wipeConfirmMessage: String {
+        let shotCount = countLabel(shots.count, "shot")
+        let beanCount = countLabel((try? context.fetchCount(FetchDescriptor<Bean>())) ?? 0, "bean")
+        let hardwareCount = countLabel((try? context.fetchCount(FetchDescriptor<Equipment>())) ?? 0, "hardware item")
+        let body: String
+        switch wipeScope {
+        case .shots:
+            body = "This permanently deletes \(shotCount) and their photos. Beans, recipes, hardware and settings stay."
+        case .library:
+            body = "This permanently deletes \(shotCount), \(beanCount) and \(hardwareCount), with their photos and recipes. Settings stay; bag numbers start again at #1."
+        case .everything:
+            body = "This permanently deletes every shot, bean, hardware item and photo, and resets all settings. Pull State starts over with onboarding."
+        case nil:
+            return ""
+        }
+        return body + " Export your shots first if you want a copy."
+    }
+
+    /// Runs after the second confirmation. A full reset closes the sheet
+    /// first and wipes a moment later, so the switch to onboarding doesn't
+    /// tear the app down under an open sheet.
+    private func performWipe() {
+        guard let scope = wipeScope else { return }
+        if scope == .everything {
+            let context = context
+            let settings = settings
+            dismiss()
+            Task {
+                try? await Task.sleep(for: .milliseconds(450))
+                try? DataWiper.wipe(.everything, in: context, settings: settings)
+            }
+            return
+        }
+        do {
+            try DataWiper.wipe(scope, in: context, settings: settings)
+            wipeFailed = false
+            wipeMessage = scope.doneMessage
+        } catch {
+            wipeFailed = true
+            wipeMessage = "Couldn't wipe your data. Please try again."
+        }
+    }
+
+    /// Shows the next dialog in the wipe chain once the previous one has
+    /// finished animating away; presenting immediately can be dropped.
+    private func present(_ show: @escaping () -> Void) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            show()
+        }
+    }
+
+    private func countLabel(_ n: Int, _ noun: String) -> String {
+        "\(n) \(noun)\(n == 1 ? "" : "s")"
     }
 }
 

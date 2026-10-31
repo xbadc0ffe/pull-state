@@ -1,7 +1,12 @@
 import SwiftUI
 
+/// One History row: photo (falling back to the bag's photo), bean and bag
+/// number, rating and extraction, the time / ratio / dose → yield line, and
+/// the date. In History's Select mode `selected` is non-nil: a checkbox leads
+/// the row, the chevron is hidden, and a ticked card gets an accent outline.
 struct ShotCard: View {
     let shot: Shot
+    var selected: Bool? = nil
     @Environment(\.psPalette) private var palette
 
     private var tone: PSPillTone {
@@ -11,6 +16,13 @@ struct ShotCard: View {
     var body: some View {
         PSCard(soft: true) {
             HStack(spacing: 12) {
+                if let selected {
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 22))
+                        .foregroundStyle(selected ? palette.accent : palette.inkMuted)
+                        .accessibilityHidden(true)
+                }
+
                 PSPhotoThumb(
                     data: shot.photoData,
                     label: "SHOT",
@@ -21,13 +33,15 @@ struct ShotCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text((shot.bean?.name ?? "Unknown").uppercased())
+                        Text((shot.bean?.name ?? Bean.unknownName).uppercased())
                             .font(PSFont.display(16, weight: .semibold))
                             .foregroundStyle(palette.ink)
                             .lineLimit(1)
-                        Text("#\(shot.bean?.bagNumber ?? 0)")
-                            .font(PSFont.mono(10))
-                            .foregroundStyle(palette.inkMuted)
+                        if let bag = shot.bean?.bagNumber {
+                            Text("#\(bag)")
+                                .font(PSFont.mono(10))
+                                .foregroundStyle(palette.inkMuted)
+                        }
                     }
 
                     HStack(spacing: 8) {
@@ -60,11 +74,19 @@ struct ShotCard: View {
 
                 Spacer(minLength: 0)
 
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.inkMuted)
+                if selected == nil {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(palette.inkMuted)
+                }
             }
             .padding(12)
+        }
+        .overlay {
+            if selected == true {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(palette.accent, lineWidth: 1.5)
+            }
         }
     }
 }

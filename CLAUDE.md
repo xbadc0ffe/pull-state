@@ -16,6 +16,8 @@ iOS/iPadOS espresso logbook. SwiftUI + SwiftData, single target, no dependencies
 - Every `.sheet` must re-apply `.environment(\.psPalette, …)` and `.environment(\.psTempUnit, …)`.
 - Never use `.navigationBarBackButtonHidden(true)` (breaks swipe-back).
 - Photos go through `PSPhotoSourceMenu` + `PSPhotoCropSheet`; store square JPEG `Data?` with `@Attribute(.externalStorage)`.
+- Views display photos through the model's `photo`, never `photoData` (reading a deleted model's photo crashes SwiftData; DESIGN.md §4.1). Forms still load/save `photoData`.
+- Sub-page top bars: compact `PSNavBar` + `PSNavBackButton` / `PSNavTextButton` / `PSNavSaveButton` / `PSNavCloseButton`, sized by `PSNavMetrics`.
 - Keep doc comments and the matching DESIGN.md section in sync with any behaviour change.
 - Features on the V2 list (DESIGN.md §17) are out of scope unless explicitly requested.
 

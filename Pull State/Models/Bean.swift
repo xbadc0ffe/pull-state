@@ -24,6 +24,8 @@ final class Bean {
     var notes: String
     var createdAt: Date
     @Attribute(.externalStorage) var photoData: Data?
+    /// `photoData` for display; nil once the bean is deleted (see `isDetached`).
+    var photo: Data? { isDetached ? nil : photoData }
     var tastingTagsRaw: [String] = []
     /// True only for the "Unknown" bean the Log screen creates when a shot is
     /// saved before any bean exists and the name prompt is left blank. Such a

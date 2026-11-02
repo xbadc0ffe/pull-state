@@ -42,9 +42,9 @@ pull-state/
 | Folder | Contents |
 |---|---|
 | `Pull_StateApp.swift` | `@main`; builds the `ModelContainer`, installs `SelectAllOnFocus` |
-| `Models/` | SwiftData `@Model`s: `Shot`, `Bean`, `Equipment`, `AppSettings`; value types `Recipe`, `BeanRatingPoint`; enums |
+| `Models/` | SwiftData `@Model`s: `Shot`, `Bean`, `Equipment`, `AppSettings`; value types `Recipe`, `BeanRatingPoint`; enums; `PersistentModel.isDetached` (behind the display-safe `photo`) |
 | `Resources/` | `Theme.swift` (palette, fonts, formatters, env keys), `PullState.storekit` |
-| `Utilities/` | `StoreManager` (StoreKit 2), `RecipePromptEvaluator` (pure prompt rules), `ShotReassignment` (re-filing shots, "Unknown" clean-up, hardware backfill), `ShotCSV` (CSV export), `DataWiper` (Wipe Data scopes), `PSThumbnailCache`, `SeedData`, `HardwareCatalog`, `SwipeBackFix`, `SelectAllOnFocus` |
+| `Utilities/` | `StoreManager` (StoreKit 2), `RecipePromptEvaluator` (pure prompt rules), `ShotReassignment` (re-filing shots, "Unknown" clean-up, hardware backfill), `ShotCSV` (CSV export + file), `ShareSheet` (share sheet for that file), `DataWiper` (Wipe Data scopes), `PSThumbnailCache`, `SeedData`, `HardwareCatalog`, `SwipeBackFix`, `SelectAllOnFocus` |
 | `Views/RootView.swift` | onboarding ↔ main switch, applies colour scheme |
 | `Views/MainTabView.swift` | the single `NavigationStack`, `NavRoute`, tab switch, About/Add sheets |
 | `Views/Components/` | `PS*` design-system views (card, field, pill, stars, nav bar, tab bar, photo picker/crop/thumb, toggle, attention glow, layout) |
@@ -63,7 +63,7 @@ pull-state/
 2. **Design system via environment.** `\.psPalette` (resolved from `colorScheme`) and `\.psTempUnit` are injected once in `MainTabView`. Sheets do not inherit environment: every `.sheet { }` re-applies both.
 3. **SwiftData, local only.** Four models, cascade on bean→shots, nullify on equipment→shots. Photos use `@Attribute(.externalStorage)`. `AppSettings` is a singleton row created by `SeedData`.
 4. **`Recipe` is a Codable value** stored as JSON on `Bean`; every field optional, nil means "not specified". Temperatures are stored in Celsius everywhere and converted only at the UI edge.
-5. **Three deliberate UIKit exceptions** live in `Utilities/` (swipe-back, select-all-on-focus) and `SliderField` (pan recognizer). Everything else is SwiftUI.
+5. **Four deliberate UIKit exceptions** live in `Utilities/` (swipe-back, select-all-on-focus, share sheet) and `SliderField` (pan recognizer). Everything else is SwiftUI.
 
 Read DESIGN.md §2–§6 before changing navigation, the data model, the recipe-prompt rules or the timer.
 
@@ -78,6 +78,8 @@ Read DESIGN.md §2–§6 before changing navigation, the data model, the recipe-
 - Every photo entry point goes through `PSPhotoSourceMenu` → `PSPhotoCropSheet` (square JPEG).
 - Strings are English-only and hard-coded; date formats are fixed `yyyy-MM-dd HH:mm`.
 - Fonts go through `PSFont` (Dynamic Type scaled, capped 1.5×); every `PSIconBtn` needs an accessibility label; `PSToggle` takes one too.
+- Sub-page top bars use the compact `PSNavBar` with `PSNavBackButton` / `PSNavTextButton` / `PSNavSaveButton` (`PSNavMetrics` sizes: 48 pt buttons, 22 pt title, 21 pt actions); don't hand-roll small header buttons.
+- Views **show** photos through the models' `photo`, never `photoData`: once a model is deleted and saved, loading its external-storage photo is a fatal SwiftData error, and SwiftUI may redraw a card for it one last time (DESIGN.md §4.1, §10.3).
 - Pure logic (recipe prompt rules, conversions, formatters) gets a unit test in `Pull StateTests`.
 - Doc comments on every type explain *why* it exists; keep them current when behaviour changes.
 - When a screen's behaviour changes, update the matching DESIGN.md section in the same commit.
@@ -92,8 +94,9 @@ Work is written on Windows, pushed to GitHub, and built on the headless Mac mini
 # compile-only sanity check (no signing)
 xcodebuild build -scheme "Pull State" -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
 
-# unit tests on the simulator
-xcodebuild test -scheme "Pull State" -destination 'platform=iOS Simulator,name=iPhone 17'
+# unit tests on the simulator (LiveDeleteTests also opens real windows in the test host;
+# -collect-test-diagnostics never stops a crashing test from hanging the run)
+xcodebuild test -scheme "Pull State" -destination 'platform=iOS Simulator,name=iPhone 17' -collect-test-diagnostics never
 
 # archive, sign with the ASC API key and upload to TestFlight
 ship "Pull State" 1.5          # ~/bin/ship; pulls first, build number = timestamp
@@ -118,7 +121,7 @@ The shared scheme already selects `PullState.storekit` (Run → Options → Stor
 | 1.2 | Full-width scroll, editable photo headers, paper-filter filter, light/dark icons |
 | 1.3 | Data protection entitlement, pre-infusion pressure, recipe-prompt toggle, slider scroll passthrough |
 | 1.4 | Pre-infusion pressure slider range, pull pressure label, Restore Purchases, version read from bundle |
-| 1.5 | Documentation pass (audit, wiki, CLAUDE.md), then the audit cleanup: Log state survives tab switches, °F recipe fix, notes no longer select-all, downscaled + cached photos, StoreKit transaction listener, Dynamic Type, accessibility, iOS-only build config, Swift 6, unit tests. Then (30 Oct) logging without setup: Source rows always shown and pulsing until set up, "+ New …" in every picker, hardware optional, bean named at save time (blank = "Unknown"); re-filing shots later (Shot edit with None / + New / grind, History Select → bulk edit, backfill offer when hardware is added, empty "Unknown" bean tidied away); About → Export shots (CSV) and Wipe Data (three scopes, double confirmation) |
+| 1.5 | Documentation pass (audit, wiki, CLAUDE.md), then the audit cleanup: Log state survives tab switches, °F recipe fix, notes no longer select-all, downscaled + cached photos, StoreKit transaction listener, Dynamic Type, accessibility, iOS-only build config, Swift 6, unit tests. Then (30 Oct) logging without setup: Source rows always shown and pulsing until set up, "+ New …" in every picker, hardware optional, bean named at save time (blank = "Unknown"); re-filing shots later (Shot edit with None / + New / grind, History Select → bulk edit, backfill offer when hardware is added, empty "Unknown" bean tidied away); About → Export shots (CSV) and Wipe Data (three scopes, double confirmation). Then (1 Nov, TestFlight feedback on build 202610302343): Export Shots became a row under Recipe Suggestions that asks first and shares a real `.csv` file, Wipe Data moved right under it; the Wipe Data crash (deleted hardware's photo read during a redraw) fixed via the display-safe `photo`; sub-page top bars 1.5× larger, with Cancel replacing Back while editing |
 
 ---
 
@@ -134,7 +137,11 @@ The shared scheme already selects `PullState.storekit` (Run → Options → Stor
 | Saving with no setup, the bean-name prompt | `LogScreen.save` / `saveWithQuickBean`, `Bean.quickAdd` (DESIGN.md §3.1) |
 | Moving shots between beans / hardware | `Utilities/ShotReassignment.swift`, `ShotDetailView` edit mode, `ShotBulkEditSheet`, `HardwareAddForm` backfill (DESIGN.md §3.2, §3.4) |
 | CSV export columns / format | `Utilities/ShotCSV.swift` (tests in `ShotCSVTests`; DESIGN.md §10.3) |
-| Wipe Data | `Utilities/DataWiper.swift`, `AboutSheet` "Your data" (DESIGN.md §10.3) |
+| How the export reaches the share sheet | `AboutSheet.exportRow` / `exportShots`, `Utilities/ShareSheet.swift` (DESIGN.md §10.3, §15.5) |
+| Wipe Data | `Utilities/DataWiper.swift`, `AboutSheet` Wipe Data button (DESIGN.md §10.3; UI-level tests in `LiveDeleteTests`) |
+| A crash reading a photo after a delete | `Models/PersistentModel+Detached.swift`; show photos via `photo` (DESIGN.md §4.1) |
+| Sub-page top bar sizes and layout | `Views/Components/PSNavBar.swift` (`PSNavMetrics`, DESIGN.md §5.3) |
+| Reading TestFlight crash reports on this server | App Store Connect API with the `ship` key: `GET /v1/apps/{id}/betaFeedbackCrashSubmissions`, then `/v1/betaFeedbackCrashSubmissions/{id}/crashLog` (already symbolicated). Pull State's app id is 6765922700 |
 | Hardware autocomplete list | `Utilities/HardwareCatalog.swift` |
 | IAP | `Utilities/StoreManager.swift`, `AboutSheet`, `PullState.storekit` |
 | Privacy / App Store compliance | `PrivacyInfo.xcprivacy`, entitlements, `INFOPLIST_KEY_*` in pbxproj, `docs/privacy.html` |

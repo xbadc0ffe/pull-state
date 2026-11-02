@@ -4,6 +4,12 @@
 // sheet calls `DataWiper.wipe` only after the second confirmation. Models are
 // fetched and deleted one by one (not a batch delete) so SwiftData applies
 // the relationship rules and removes external-storage photos with them.
+//
+// The wipe runs while the tab screens are still mounted, and SwiftUI may
+// redraw a card for a model this save just deleted. That's why views read
+// photos through `photo` (see `PersistentModel.isDetached`): in 1.5 build
+// 202610302343 a Hardware card read a deleted machine's photo here and
+// SwiftData crashed. `LiveDeleteTests` runs every scope under the real UI.
 import Foundation
 import SwiftData
 

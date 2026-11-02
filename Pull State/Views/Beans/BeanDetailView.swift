@@ -49,34 +49,23 @@ struct BeanDetailView: View {
             PSPageBackground()
             VStack(spacing: 0) {
                 PSNavBar(title: editing ? "Edit bean" : "Bean") {
-                    PSIconBtn(systemName: "chevron.left", label: "Back", action: { dismiss() })
+                    if editing {
+                        PSNavTextButton(title: "Cancel", muted: true) { editing = false }
+                    } else {
+                        PSNavBackButton { dismiss() }
+                    }
                 } trailing: {
                     if let bean {
                         if editing {
-                            HStack(spacing: 6) {
-                                Button("Cancel") { editing = false }
-                                    .foregroundStyle(palette.inkSoft)
-                                    .font(PSFont.body(14))
-                                    .buttonStyle(.plain)
-                                Button("Save") {
-                                    commitEdit(into: bean)
-                                    editing = false
-                                }
-                                .foregroundStyle(.white)
-                                .font(PSFont.body(13, weight: .bold))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(palette.accent, in: Capsule())
-                                .buttonStyle(.plain)
+                            PSNavSaveButton {
+                                commitEdit(into: bean)
+                                editing = false
                             }
                         } else {
-                            Button("Edit") {
+                            PSNavTextButton(title: "Edit", weight: .semibold) {
                                 loadDraft(from: bean)
                                 editing = true
                             }
-                            .foregroundStyle(palette.accent)
-                            .font(PSFont.body(14, weight: .semibold))
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -135,7 +124,7 @@ struct BeanDetailView: View {
         if editing {
             PSEditablePhotoHeader(data: $dPhotoData, label: "BAG PHOTO")
         } else {
-            PSPhotoThumb(data: bean.photoData, label: "BAG PHOTO", radius: 14, hero: true)
+            PSPhotoThumb(data: bean.photo, label: "BAG PHOTO", radius: 14, hero: true)
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
         }

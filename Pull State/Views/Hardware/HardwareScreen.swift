@@ -86,7 +86,7 @@ struct HardwareCard: View {
     var body: some View {
         PSCard(soft: true) {
             HStack(spacing: 12) {
-                PSPhotoThumb(data: item.photoData, label: "HARDWARE", radius: 10)
+                PSPhotoThumb(data: item.photo, label: "HARDWARE", radius: 10)
                     .frame(width: 78, height: 78)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name)

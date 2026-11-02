@@ -91,16 +91,25 @@ struct PSPhotoCropSheet: View {
 
     @ViewBuilder
     private func chrome(cropSide: CGFloat, base: CGSize, topInset: CGFloat) -> some View {
+        // Sized to match the sub-page nav bars (`PSNavMetrics`).
         HStack {
-            Button("Cancel") { onCancel() }
-                .foregroundStyle(.white)
-                .font(PSFont.body(15, weight: .semibold))
+            Button { onCancel() } label: {
+                Text("Cancel")
+                    .foregroundStyle(.white)
+                    .font(PSFont.body(PSNavMetrics.text, weight: .semibold))
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             Spacer()
 
             Text("Crop photo")
                 .foregroundStyle(.white)
-                .font(PSFont.display(16, weight: .semibold))
+                .font(PSFont.display(PSNavMetrics.title, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -113,10 +122,11 @@ struct PSPhotoCropSheet: View {
             } label: {
                 Text("Done")
                     .foregroundStyle(.white)
-                    .font(PSFont.body(15, weight: .bold))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
+                    .font(PSFont.body(PSNavMetrics.saveLabel, weight: .bold))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 9)
                     .background(palette.accent, in: Capsule())
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
         }

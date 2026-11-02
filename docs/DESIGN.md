@@ -37,7 +37,7 @@ enum NavRoute: Hashable {
 }
 ```
 
-Detail views render their own `PSNavBar` with a chevron back button. The system navigation bar is hidden via `.toolbar(.hidden, for: .navigationBar)`. Critically, **`.navigationBarBackButtonHidden(true)` is never called anywhere** — that modifier silently disables the interactive swipe-from-left pop gesture. To make swipe-back continue working even with a hidden toolbar, a `UINavigationController` extension (`Utilities/SwipeBackFix.swift`, see §15.1) installs itself as the `interactivePopGestureRecognizer` delegate.
+Detail views render their own `PSNavBar` with a round chevron back button (`PSNavBackButton`); while a detail page is in edit mode the back button is replaced by **Cancel** on the left, with the filled **Save** capsule on the right (§5.3). The system navigation bar is hidden via `.toolbar(.hidden, for: .navigationBar)`. Critically, **`.navigationBarBackButtonHidden(true)` is never called anywhere** — that modifier silently disables the interactive swipe-from-left pop gesture. To make swipe-back continue working even with a hidden toolbar, a `UINavigationController` extension (`Utilities/SwipeBackFix.swift`, see §15.1) installs itself as the `interactivePopGestureRecognizer` delegate.
 
 Sheet presentations propagate `\.psPalette` and `\.psTempUnit` into the sheet's environment explicitly — sheets do not inherit environment by default in SwiftUI, so each `.sheet { … .environment(\.psPalette, palette).environment(\.psTempUnit, settings.temperatureUnit) }` block sets them.
 
@@ -71,7 +71,7 @@ This keeps the warm-wash gradient edge-to-edge **and** lets vertical drags on th
 
 Section order, top to bottom:
 
-1. **Source** — three picker rows in one card: Machine, Grinder, Beans, **always shown** (no setup is required to log). Each row expands inline when tapped to show options; the current choice carries a checkmark and every list ends in a **"+ New machine / grinder / bean"** row that opens the matching add form (§3.3, §3.4) and selects the item it creates. Each row and each option renders a leading thumbnail (`PSPhotoThumb`, see §5.3) sourced from the entity's `photoData`, falling back to the striped `PSPlaceholder` when no photo has been attached. **A row with nothing set up yet** (its list is empty) reads **"Not set"** in the accent colour with a hint ("Tap to add your machine", "Tap to add, or name it when you save"), shows a dashed "+" badge in place of the photo, and **pulses** with `PSAttentionGlow` (a steady highlight when Reduce Motion is on); tapping it opens the add form directly. When a bean is selected, a **View Recipe** chip appears under the card → opens `RecipeSheet` (§3.7). On first appear, machine/grinder/bean are pre-selected from the **most recently logged shot** (`Shot.date` descending, take 1); when no shots exist yet (or the last shot had no machine/grinder), each picker falls back to the first item in its respective list. After a save the same equipment stays selected, so the next shot starts with the just-saved gear. The recipe preload (item 3) follows the *effective* bean, so it also runs when the selected bean disappears and the picker falls back to another one.
+1. **Source** — three picker rows in one card: Machine, Grinder, Beans, **always shown** (no setup is required to log). Each row expands inline when tapped to show options; the current choice carries a checkmark and every list ends in a **"+ New machine / grinder / bean"** row that opens the matching add form (§3.3, §3.4) and selects the item it creates. Each row and each option renders a leading thumbnail (`PSPhotoThumb`, see §5.3) sourced from the entity's `photo` (§4.1), falling back to the striped `PSPlaceholder` when no photo has been attached. **A row with nothing set up yet** (its list is empty) reads **"Not set"** in the accent colour with a hint ("Tap to add your machine", "Tap to add, or name it when you save"), shows a dashed "+" badge in place of the photo, and **pulses** with `PSAttentionGlow` (a steady highlight when Reduce Motion is on); tapping it opens the add form directly. When a bean is selected, a **View Recipe** chip appears under the card → opens `RecipeSheet` (§3.7). On first appear, machine/grinder/bean are pre-selected from the **most recently logged shot** (`Shot.date` descending, take 1); when no shots exist yet (or the last shot had no machine/grinder), each picker falls back to the first item in its respective list. After a save the same equipment stays selected, so the next shot starts with the just-saved gear. The recipe preload (item 3) follows the *effective* bean, so it also runs when the selected bean disappears and the picker falls back to another one.
 2. **Timer** — `DualTrackTimer`. See §6.
 3. **Settings** — `Grind Setting` text field at the top (free-text, e.g. `"22"`), then sliders for `Dose / Weight In` (7–25 g, 0.1 step), `Yield / Weight Out` (7–75 g, 0.1 step), `Water Temp` (70–105 °C, 0.5 step — converted to Fahrenheit when the user has chosen °F, see §11.1), `Pre-Infusion Pressure` (0–4 bar, 0.1 step), `Pull Pressure` (4–12 bar, 0.1 step), and a **Paper Filter** `PSToggle` row at the **bottom** of the card (below Pull Pressure). When the bean changes, **only the recipe fields that are non-nil pre-populate their slider** — nil fields leave the slider where it was. The Grind Setting field also preloads from `recipe.grind` (and clears when the recipe value is nil). The Paper Filter toggle does **not** load from the bean — it is a per-shot decision, not a recipe parameter. A small caption under the card reads "Loaded from {bean name} recipe." — shown only when that recipe has at least one value (`Recipe.isEmpty` is false), so a new or quick-added bean doesn't claim to have loaded anything. The Grind Setting row is the shared `GrindSettingField` (also used by Shot edit).
 4. **Extraction** — three pills (Sour / Perfect / Bitter), tone-colored. Tappable to toggle on/off (single-select).
@@ -106,7 +106,7 @@ If neither condition is met, no prompt appears. Both prompts use `Bean.shots` (w
 
 Filters that point at a bean, machine or grinder that no longer exists (deleted, wiped, or a placeholder tidied away) are dropped automatically, so the list never silently stays empty.
 
-`ShotCard`'s leading thumbnail uses the fallback chain `shot.photoData → shot.bean?.photoData → PSPlaceholder`, implemented via the optional `fallback: Data?` parameter on `PSPhotoThumb` (§5.3). A shot without its own photo therefore shows the bag's photo at a glance instead of the striped placeholder. This fallback is scoped to the History `ShotCard` only — the Shot detail hero photo, Log source picker thumbnails, and Bean / Hardware overview rows continue to use the single-data path.
+`ShotCard`'s leading thumbnail uses the fallback chain `shot.photo → shot.bean?.photo → PSPlaceholder`, implemented via the optional `fallback: Data?` parameter on `PSPhotoThumb` (§5.3). A shot without its own photo therefore shows the bag's photo at a glance instead of the striped placeholder. This fallback is scoped to the History `ShotCard` only — the Shot detail hero photo, Log source picker thumbnails, and Bean / Hardware overview rows continue to use the single-data path.
 
 **Filter sheet** — extraction tone pills, **tasting-notes pills** (multi-select; AND-match — only shots that contain *all* selected tags pass), a **Paper Filter** row with three states backed by `Bool?` (nil = Any, no filtering; `true` = "With Filter", filters to `usedPaperFilter == true`; `false` = "Without Filter", filters to `usedPaperFilter == false`). Tapping a selected pill deselects it back to Any, so the user can never land in a contradictory "both selected" state. Below it: min-rating pills (Any / 2+ / 3+ / 4+ / 5+), and three select rows (any beans / any machine / any grinder, populated from the actual library). The filter chip's badge counter on History sums extraction + min-rating + each select + **each active tag** + **+1 whenever the paper-filter dimension is non-nil** (either With Filter or Without Filter). Clear-all button on the left, Apply on the right.
 
@@ -184,14 +184,14 @@ The Hardware tab icon uses the SF Symbol `espresso.machine` when available (iOS 
 
 Presented from any tab via the `…` (ellipsis) icon in the top-right of the navigation bar. Large detent. Contents:
 
-- × close button (top-right)
+- × close button (top-right, `PSNavCloseButton`)
 - App logo — `Image("badc0ffe-logo")` from the asset catalog, capped at 160 pt wide
 - Title "Pull State"
 - Version line "v {CFBundleShortVersionString}", read from the bundle at runtime
-- Card with rows: **Built by** (badc0ffe), **Contact** (info@badc0ffe.net), **GitHub** (tappable `Link` to `https://github.com/xbadc0ffe/pull-state`, accent-colored + underlined), **Temperature** (Celsius / Fahrenheit switch — see §11.1), **Appearance** (System / Light / Dark switch), **Recipe Suggestions** (toggle for the post-save prompts, §3.1)
+- Card with rows: **Built by** (badc0ffe), **Contact** (info@badc0ffe.net), **GitHub** (tappable `Link` to `https://github.com/xbadc0ffe/pull-state`, accent-colored + underlined), **Temperature** (Celsius / Fahrenheit switch — see §11.1), **Appearance** (System / Light / Dark switch), **Recipe Suggestions** (toggle for the post-save prompts, §3.1), **Export Shots** (share icon in place of a toggle; asks first, then opens the share sheet — §10.3)
+- Red-outlined **Wipe Data** button directly under the card — §10.3
 - **Tip jar** and **Restore Purchases** — see §10
 - Footer copy block on `surfaceAlt` background
-- **Your data** (at the very bottom): **Export shots** card above a red-outlined **Wipe Data** button — see §10.3
 
 ### 3.6 Onboarding
 
@@ -208,7 +208,7 @@ On finish: any non-empty machine, grinder, and bean entered are inserted into Sw
 
 ### 3.7 Recipe sheet
 
-Presented from the **View Recipe** chip on the Log screen's Source card (when a bean is selected). Large detent over `palette.surface`, × close button top-right, swipe-down dismissible — same chrome conventions as the About sheet.
+Presented from the **View Recipe** chip on the Log screen's Source card (when a bean is selected). Large detent over `palette.surface`, × close button top-right, swipe-down dismissible — same chrome conventions as the About sheet. The header row uses the sub-page nav components (§5.3): **Edit** / **Cancel** on the left, the **Save** capsule (while editing) and the round × on the right.
 
 Header: bean name, "BAG #X · RECIPE".
 
@@ -267,6 +267,8 @@ Computed/exposed:
 Delete rule: `.cascade` on `shots` — deleting a bean removes all its shots. This is what the Bean detail's delete confirmation describes to the user.
 
 `photoData` uses `@Attribute(.externalStorage)` so bag photos live outside the SQLite file.
+
+**Displaying photos — `photo`, not `photoData`.** Bean, Shot and Equipment each have `var photo: Data? { isDetached ? nil : photoData }`, and every view that *shows* a photo reads `photo` (`photoData` is still what forms load and save). `PersistentModel.isDetached` (`Models/PersistentModel+Detached.swift`) is `modelContext == nil`, i.e. deleted and saved. External-storage data is loaded lazily, and loading it for a deleted model is a fatal SwiftData error ("backing data was detached from a context without resolving attribute faults"), which SwiftUI can trigger by redrawing a list card one last time during a wipe (§10.3).
 
 ### 4.2 Shot
 
@@ -418,7 +420,7 @@ Active palette is delivered via SwiftUI environment (`\.psPalette`), resolved ag
 - **Body** — `.system(.default)` for general text
 - **Mono** — `.system(.monospaced)` for numeric values, timestamps, and small caps labels
 
-Sizes are explicit design-time points so the layout matches the visual prototype. `PSFont` scales each size with the user's Dynamic Type setting via `UIFontMetrics(forTextStyle: .body)`, capped at 1.5× so the fixed-size chrome (tab bar, 32 pt icon buttons, timer squares) stays usable at accessibility sizes. (`Font.system(size:)` alone would be a fixed size.)
+Sizes are explicit design-time points so the layout matches the visual prototype. `PSFont` scales each size with the user's Dynamic Type setting via `UIFontMetrics(forTextStyle: .body)`, capped at 1.5× so the fixed-size chrome (tab bar, 32 pt tab-screen icon buttons, 48 pt sub-page back/close buttons, timer squares) stays usable at accessibility sizes. (`Font.system(size:)` alone would be a fixed size.)
 
 ### 5.3 Reusable components
 
@@ -432,7 +434,7 @@ Defined in `Views/Components/` and used everywhere:
 - `PSPlaceholder` — diagonal-stripe Canvas (mirrors the prototype's placeholder)
 - `PSPhotoThumb` — square thumbnail that decodes `Data?` into a `UIImage` and falls back to `PSPlaceholder` when the data is missing or undecodable; used by every photo display in the app (overview rows, Source pickers, detail-view hero photos, edit cards). Decoding goes through `Utilities/PSThumbnailCache.swift`: off the main actor, downsampled with ImageIO to 320 px (thumbnails) or 1700 px (`hero: true`), and cached by content hash, so list rows never decode full-size JPEGs on the main thread. The image is rendered with `.scaledToFit()` so any non-square photo sits as a centered rectangle inside the square slot with transparent space around it — no overflow into adjacent text
 - `PSPhotoCropSheet` — full-screen square-crop UI shown after every photo pick or capture (see §14)
-- `PSNavBar` — top bar (small or large variant), with leading and trailing slots
+- `PSNavBar` — top bar with leading and trailing slots. `large: true` is the tab-screen style (32 pt `PSIconBtn`s in a row, 32 pt serif title underneath). The default compact style is for sub-pages (detail pages, add forms) and is sized by `PSNavMetrics`, 1.5× the original chrome after TestFlight feedback that the back arrow was hard to hit and the title easy to miss: 48 pt round buttons, 22 pt semibold title, 21 pt text actions. A small custom `Layout` centres the title on the bar, or between the controls when one side is too wide, so it never runs under a button (it shrinks to 70 % and then truncates as a last resort). Its controls are shared components: `PSNavBackButton` (round chevron), `PSNavCloseButton` (round ✕ for the About and Recipe sheets), `PSNavTextButton` (Edit / Cancel / Save / Close; accent, or `muted` grey; 44 pt tall hit area) and `PSNavSaveButton` (filled capsule used while editing). The Filter, Sort and bulk-edit sheet headers and the photo crop screen use the same sizes
 - `PSTabBar` — custom rounded chrome bar; the Beans tab uses a Canvas-drawn three-bean cluster (`BeanIcon`); the Hardware tab tries `espresso.machine` and falls back to `cup.and.saucer.fill`
 - `PSIconBtn` (requires an accessibility `label`), `PSToggle` (accessibility-represented as a real `Toggle`), `PSRoastBadge`, `IconChip`, `StatCard`, `PSSection` (section label + content, used by every detail/add screen)
 - `FlowLayout` — custom `Layout` for tag clouds. `alignment: HorizontalAlignment` parameter (`.leading` default; supports `.center` and `.trailing`) is set per-callsite — the Log screen's Tasting notes use `.center`, Process pills in the Bean form use the default `.leading`. Two-pass placement: first pass groups subviews into lines by width, second pass places each line with the requested horizontal alignment.
@@ -554,10 +556,10 @@ Layout (top to bottom):
 
 1. App logo — `Image("badc0ffe-logo")` from the asset catalog (max 160 pt wide, `.scaledToFit()`)
 2. Title "Pull State" + version line read from `CFBundleShortVersionString`
-3. Identity card — Built by, Contact, GitHub (tappable `Link`), **Temperature** (Celsius/Fahrenheit `TempUnitSwitch`), **Appearance** (System/Light/Dark `ModeSwitch`)
-4. Tip jar (see below)
-5. Tagline footer on `surfaceAlt`
-6. **Your data** — Export shots, then Wipe Data at the very bottom (§10.3)
+3. Identity card — Built by, Contact, GitHub (tappable `Link`), **Temperature** (Celsius/Fahrenheit `TempUnitSwitch`), **Appearance** (System/Light/Dark `ModeSwitch`), **Recipe Suggestions** (toggle), **Export Shots** (§10.3)
+4. **Wipe Data** button (§10.3)
+5. Tip jar (see below)
+6. Tagline footer on `surfaceAlt`
 
 ### 10.1 In-App Purchase — Tip Jar
 
@@ -580,9 +582,14 @@ State persistence: on a verified purchase, `AppSettings.hasTipped` flips true. T
 
 ### 10.3 Your data — export and wipe
 
-A `PSSection("Your data")` at the very bottom of the sheet, below the tagline footer.
+Both live right under the settings rows, above the tip jar.
 
-**Export shots** — a card (tablecells icon, "Export shots", "N shots as a CSV table for Excel, Numbers or Sheets.", share icon) that is a `ShareLink`; disabled with "No shots to export yet." when the history is empty. The share sheet offers Save to Files, AirDrop, Mail, etc.; the suggested file name is `PullState-Shots-YYYY-MM-DD.csv`. The `ShareLink` item is `ShotCSVExport` (`Utilities/ShotCSV.swift`), a `Transferable` that carries only the `ModelContainer` and the temperature unit and builds the file on the main actor when the share sheet asks for it, so opening About never walks the history. Format (`ShotCSV`, unit-tested):
+**Export Shots** — the last row of the settings card, laid out like Recipe Suggestions with a share icon (`square.and.arrow.up`, accent; muted when there are no shots) where the toggle would be; the whole row is the button. Tapping it asks first:
+
+- with shots: *"Export N shots as a CSV table?"* — "Creates PullState-Shots-YYYY-MM-DD.csv, a table you can save to Files, send, or open in Excel, Numbers or Google Sheets. Photos aren't included." — **Cancel** / **Export**
+- with none: *"No shots to export yet"* — "Log a shot first, then export your history here." — **OK**
+
+On **Export** the CSV is written with `ShotCSV.writeFile` to a temporary `Export/` folder (emptied first, so only the newest export is kept; iOS purges tmp on its own) and, ~0.45 s later once the alert has gone, `ShareSheetPresenter` (`Utilities/ShareSheet.swift`, a documented UIKit exception — §15.4) opens the system share sheet on that **file URL**, anchored to the row so the iPad popover points at it. Sharing a real file rather than in-memory data is what makes Files keep the name and `.csv` extension and makes Mail and Messages attach a file instead of pasting the table as text (1.5 build 202610302343 used a `ShareLink` with a `DataRepresentation`, which did exactly that). If writing the file fails, "Couldn't create the export file. Please try again." appears under Wipe Data. Format (`ShotCSV`, unit-tested):
 
 - RFC 4180: comma-separated, fields containing a comma, quote or line break are quoted with inner quotes doubled, CRLF line endings; a UTF-8 byte-order mark first so Excel on Windows reads accents and "°" correctly
 - One header row, then one row per shot, **oldest first**. Columns: Date (`yyyy-MM-dd HH:mm`, POSIX/Gregorian, device time zone), Bean, Bag #, Roaster, Machine, Grinder, Grind, Dose (g), Yield (g), Ratio (1:x), Water Temp (°C or °F — the user's chosen unit, named in the header), Pre-Infusion Pressure (bar), Pre-Infusion Time (s), Pull Pressure (bar), Pull Time (s), Extraction, Tasting Notes (`; `-separated), Rating, Paper Filter (Yes/No), Notes. Numbers use a `.` decimal point (one decimal, ratio two)
@@ -590,7 +597,7 @@ A `PSSection("Your data")` at the very bottom of the sheet, below the tagline fo
 - Free-text cells that start like a spreadsheet formula (`=`, `+`, `-`, `@`, tab) get a leading apostrophe, so a note such as "-1 step finer" stays text (Excel hides the apostrophe) and nothing in a note can run as a formula
 - Photos are not exported
 
-**Wipe Data** — a red-outlined button. Tapping it opens a `confirmationDialog` *"Wipe data — Choose what to delete. You'll be asked to confirm twice before anything is removed."* with three destructive choices (`WipeScope`, `Utilities/DataWiper.swift`):
+**Wipe Data** — a red-outlined button directly under the settings card. Tapping it opens a `confirmationDialog` *"Wipe data — Choose what to delete. You'll be asked to confirm twice before anything is removed."* with three destructive choices (`WipeScope`, `Utilities/DataWiper.swift`):
 
 | Choice | Deletes | Keeps |
 |---|---|---|
@@ -599,6 +606,8 @@ A `PSSection("Your data")` at the very bottom of the sheet, below the tagline fo
 | **Everything (full reset)** | all of the above, and every setting back to first-launch values (appearance System, °C, recipe suggestions on, tip state cleared — re-derived from StoreKit next time About opens) | nothing; `hasCompletedOnboarding` flips off and the app returns to onboarding |
 
 Two alerts follow in a row: first a scope-specific one ("Delete all shots?" / "Delete shots, beans & hardware?" / "Reset everything?") whose message states the counts and ends "Export your shots first if you want a copy." — **Cancel** / **Continue**; then *"Are you sure? This can't be undone."* — **Cancel** / **Wipe Shots** · **Wipe Data** · **Reset Everything**. Each dialog is presented ~0.45 s after the previous one closes so presentations never collide. Models are fetched and deleted one by one (not a batch delete) so relationship rules run and external-storage photos are removed with them. A partial wipe leaves the sheet open with "Shot history wiped." / "Shots, beans and hardware wiped." under the button; a full reset closes the sheet first and wipes a moment later, so the switch to onboarding never happens under an open sheet.
+
+The wipe runs while the four tab screens are still mounted, and SwiftUI can redraw a list card for a model the same save just deleted (a Hardware card is invalidated because its shot count changed, then redrawn before the list drops it). Ordinary attributes still read their last values, but photos are external storage and loaded lazily, and loading one for a deleted model is a fatal SwiftData error. 1.5 build 202610302343 crashed exactly there on **Everything** (and **Shots, beans & hardware** did too whenever hardware had photos). So every view reads photos through the models' `photo` accessor, which returns nil once `PersistentModel.isDetached` (deleted and saved) — see §4. `LiveDeleteTests` runs every scope, plus single deletes, under the real `RootView` in a window over an on-disk store with photos.
 
 ---
 
@@ -723,7 +732,7 @@ Read-only thumbnails (Bean / Hardware overview rows, Log Source pickers, the rea
 
 ## 15. Behavioral Utilities
 
-Three small pieces of UIKit-adjacent behavior live in `Utilities/`. Each is a deliberate, narrow exception to "SwiftUI only" — kept tiny and isolated so the rest of the codebase stays declarative.
+Small pieces of UIKit-adjacent behavior live in `Utilities/` (§15.1, §15.2 and the share sheet in §15.5). Each is a deliberate, narrow exception to "SwiftUI only" — kept tiny and isolated so the rest of the codebase stays declarative.
 
 ### 15.1 Swipe-back fix (`Utilities/SwipeBackFix.swift`)
 
@@ -743,6 +752,10 @@ Creates the `AppSettings` singleton on first launch only. The app starts empty �
 
 If the persistent `ModelContainer` cannot be opened (corruption, an impossible migration), the store files (`default.store`, `-shm`, `-wal`, and the external-storage folder) are moved into a timestamped `Unreadable-<epoch>` sibling folder and a fresh store is created; `RootView` shows a one-time "Logbook reset" alert. If even that fails the app runs in memory for the session. A crash loop on launch is never acceptable.
 
+### 15.5 Share sheet (`Utilities/ShareSheet.swift`)
+
+`ShareSheetPresenter` is an invisible `UIViewControllerRepresentable` anchor that presents `UIActivityViewController` for a file URL as soon as its `fileURL` becomes non-nil, and calls `onDone` when the sheet closes. It exists because About → Export Shots must ask *"Export N shots as a CSV table?"* first, and SwiftUI's `ShareLink` can only open the sheet from its own tap. It always shares a real file (written by `ShotCSV.writeFile`) so the name and `.csv` survive (§10.3). UIKit shows a share sheet only once its content has loaded, so `presentingViewController` stays nil for a moment after `present`; the coordinator keeps a weak reference to the sheet in flight to avoid opening a second one. It drops that reference when the sheet closes or the caller clears `fileURL`, and About clears `fileURL` before each export so every export counts as a change. On iPad the popover is anchored to the Export Shots row.
+
 ---
 
 ## 16. Privacy & Security
@@ -755,7 +768,7 @@ Pull State is local-only by design. No accounts, no backend, no network requests
 - **Storage** — SwiftData store lives in the app's default Application Support directory (no App Group, no shared container). Photos use `@Attribute(.externalStorage)` so blobs live in the protected subdirectory rather than inline in the SQLite file. No `UserDefaults` writes anywhere — `AppSettings` is a SwiftData `@Model`.
 - **No File Sharing surfaces** — `UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace` are absent. The app sandbox is not exposed via Files or iTunes File Sharing.
 - **No ATS exceptions** — `NSAppTransportSecurity` is not set. The app makes zero network requests, so any ATS exception would be a smell.
-- **Export is user-initiated** — About → Export shots hands a CSV file to the system share sheet (§10.3). Pull State itself sends nothing anywhere; where the file goes (Files, AirDrop, Mail, …) is the user's choice. Photos are never included. `docs/privacy.html` says the same.
+- **Export is user-initiated** — About → Export Shots, after a confirmation, hands a CSV file to the system share sheet (§10.3). Pull State itself sends nothing anywhere; where the file goes (Files, AirDrop, Mail, …) is the user's choice. Photos are never included. `docs/privacy.html` says the same.
 - **StoreKit verification** — `Utilities/StoreManager.swift` switches on `VerificationResult` for both purchase and restore; unverified transactions are explicitly discarded. Restore uses `Transaction.currentEntitlements` (not a local flag). `AppSettings.hasTipped` is a UI cache that's re-derived from `currentEntitlements` on every About-sheet appear — never the source of truth.
 - **No logging** — there are zero `print` / `NSLog` / `os.Logger` / `debugPrint` calls in the codebase. If logging is ever introduced, gate it behind `#if DEBUG` and keep user content (bean names, notes, ratings, transaction data, photo bytes, sandbox paths) out of the log entirely.
 - **Repo hygiene** — `SECURITY.md` at the repo root documents the disclosure path. `.gitignore` covers `.DS_Store`, `xcuserdata/`, `*.xcuserstate`, `DerivedData/`, `*.p8` / `*.p12` / `AuthKey_*.p8`, `*.cer`, `*.mobileprovision`. `prompts/` and `.claude/` stay gitignored; `CLAUDE.md` is committed as the project's agent instructions.
@@ -787,9 +800,10 @@ Pull State/
 ├── Pull State.entitlements        (data-protection class — see §16)
 ├── PrivacyInfo.xcprivacy          (no tracking, no collection — see §16)
 ├── Models/
-│   ├── Bean.swift                 (incl. photoData: Data?, recipe accessor)
-│   ├── Shot.swift                 (photoData: Data?)
-│   ├── Equipment.swift            (incl. photoData: Data?)
+│   ├── Bean.swift                 (incl. photoData: Data? + display-safe photo, recipe accessor)
+│   ├── Shot.swift                 (photoData: Data? + display-safe photo)
+│   ├── Equipment.swift            (incl. photoData: Data? + display-safe photo)
+│   ├── PersistentModel+Detached.swift (isDetached: deleted and saved; see §4.1)
 │   ├── AppSettings.swift          (AppearanceMode + TemperatureUnit enums)
 │   ├── Recipe.swift               (all-optional Codable value type, BeanRatingPoint)
 │   └── Enums.swift                (Extraction, Roast, BeanProcess, EquipmentKind, TastingTag, SortOrder)
@@ -801,7 +815,8 @@ Pull State/
 │   ├── StoreManager.swift         (StoreKit 2, Transaction.updates listener, entitlement restore)
 │   ├── RecipePromptEvaluator.swift (pure Save/Adjust-recipe rules + apply strategies)
 │   ├── ShotReassignment.swift     (bulk/single re-filing of shots, "Unknown" clean-up, hardware backfill)
-│   ├── ShotCSV.swift              (CSV export format + the ShareLink Transferable)
+│   ├── ShotCSV.swift              (CSV export format + writeFile for the share sheet)
+│   ├── ShareSheet.swift           (ShareSheetPresenter: UIActivityViewController for a file URL, §15.5)
 │   ├── DataWiper.swift            (WipeScope + About → Wipe Data)
 │   ├── PSThumbnailCache.swift     (off-main ImageIO downsampling + NSCache)
 │   ├── HardwareCatalog.swift      (machines + grinders for the combobox)
@@ -818,7 +833,7 @@ Pull State/
     ├── About/                     (AboutSheet — also defines ModeSwitch + TempUnitSwitch)
     └── Onboarding/                (OnboardingFlow + 4 step views; OnbCombobox/OnbField in OnbHardwareStep)
 
-Pull StateTests/                   (Swift Testing: recipe-prompt rules, Recipe codable, temperature conversion, catalog, formatters, model helpers, CSV export, shot re-filing + "Unknown" clean-up + backfill and every wipe scope against an in-memory SwiftData store)
+Pull StateTests/                   (Swift Testing: recipe-prompt rules, Recipe codable, temperature conversion, catalog, formatters, model helpers, CSV export + file writing, shot re-filing + "Unknown" clean-up + backfill and every wipe scope against an in-memory SwiftData store; LiveDeleteTests runs wipes and deletes under the real RootView in a window over an on-disk store with photos)
 ```
 
 Asset catalog: `Assets.xcassets/badc0ffe-logo.imageset/` (sourced from `branding/badc0ffe-logo.png`) — used by the About sheet header.

@@ -1,17 +1,15 @@
 // ShotCSV.swift
 //
-// CSV export of the shot history (About → Your Data → Export shots). The
-// formatting is pure (`ShotCSV`) and unit-tested; `ShotCSVExport` is the
-// `Transferable` handed to `ShareLink`, and builds the file only when the
-// share sheet asks for it, so opening About never walks the whole history.
+// CSV export of the shot history (About → Export Shots). The formatting is
+// pure and unit-tested. The file is only built after the user confirms the
+// export; `writeFile` saves it as a real `.csv` file in a temporary folder and
+// `ShareSheetPresenter` hands that file's URL to the share sheet.
 //
 // The file is RFC 4180 CSV with CRLF line endings and a UTF-8 byte-order
 // mark, so Excel on Windows shows accented bean names and the degree sign
 // correctly. One row per shot, oldest first. Photos are not exported.
 import Foundation
 import SwiftData
-import CoreTransferable
-import UniformTypeIdentifiers
 
 /// One shot flattened to plain values, so formatting never touches SwiftData
 /// (and never loads a photo).
@@ -138,6 +136,30 @@ enum ShotCSV {
         "PullState-Shots-\(fileDateFormatter.string(from: date)).csv"
     }
 
+    /// Temporary folder that holds the latest export. iOS purges it on its own.
+    static var exportFolder: URL {
+        FileManager.default.temporaryDirectory.appending(path: "Export", directoryHint: .isDirectory)
+    }
+
+    /// Saves the CSV as `fileName(on:)` in `folder` and returns the file's
+    /// URL for the share sheet. Sharing a file rather than in-memory data is
+    /// what keeps the name and ".csv" in Files and makes Mail and Messages
+    /// attach a file instead of pasting the table as text. The folder is
+    /// emptied first, so only the newest export is ever kept.
+    static func writeFile(
+        rows: [ShotCSVRow],
+        unit: TemperatureUnit,
+        on date: Date = .now,
+        in folder: URL = ShotCSV.exportFolder
+    ) throws -> URL {
+        let fileManager = FileManager.default
+        try? fileManager.removeItem(at: folder)
+        try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: fileName(on: date), directoryHint: .notDirectory)
+        try data(rows: rows, unit: unit).write(to: url, options: .atomic)
+        return url
+    }
+
     private static func decimal(_ value: Double, places: Int) -> String {
         guard value.isFinite else { return "" }
         return String(format: "%.\(places)f", value)
@@ -154,30 +176,5 @@ enum ShotCSV {
         f.calendar = Calendar(identifier: .gregorian)
         f.dateFormat = pattern
         return f
-    }
-}
-
-/// What the About sheet hands to `ShareLink`. It carries only the container
-/// and the temperature unit; the shots are fetched and formatted on the main
-/// actor when the share sheet requests the data.
-nonisolated struct ShotCSVExport: Transferable, Sendable {
-    let container: ModelContainer
-    /// `TemperatureUnit.rawValue`, kept as a plain string so this value can
-    /// cross into the share sheet's export closure.
-    let unitRaw: String
-    let fileName: String
-
-    static var transferRepresentation: some TransferRepresentation {
-        DataRepresentation(exportedContentType: .commaSeparatedText) { export in
-            await export.makeData()
-        }
-        .suggestedFileName { $0.fileName }
-    }
-
-    @MainActor
-    func makeData() -> Data {
-        let unit = TemperatureUnit(rawValue: unitRaw) ?? .celsius
-        let shots = (try? container.mainContext.fetch(FetchDescriptor<Shot>())) ?? []
-        return ShotCSV.data(rows: shots.map(ShotCSVRow.init(shot:)), unit: unit)
     }
 }

@@ -24,10 +24,10 @@ struct ShotCard: View {
                 }
 
                 PSPhotoThumb(
-                    data: shot.photoData,
+                    data: shot.photo,
                     label: "SHOT",
                     radius: 10,
-                    fallback: shot.bean?.photoData
+                    fallback: shot.bean?.photo
                 )
                 .frame(width: 64, height: 64)
 

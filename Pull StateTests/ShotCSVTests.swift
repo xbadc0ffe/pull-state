@@ -105,4 +105,22 @@ struct ShotCSVTests {
     @Test func fileNameCarriesTheDate() throws {
         #expect(ShotCSV.fileName(on: try date(2026, 10, 30)) == "PullState-Shots-2026-10-30.csv")
     }
+
+    /// The share sheet gets a real ".csv" file, and each export replaces the last.
+    @Test func writeFileSavesANamedCSVAndKeepsOnlyTheNewest() throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appending(path: "ShotCSVTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let rows = [sample(on: try date(2026, 10, 30))]
+
+        let first = try ShotCSV.writeFile(rows: rows, unit: .celsius, on: try date(2026, 10, 30), in: folder)
+        #expect(first.lastPathComponent == "PullState-Shots-2026-10-30.csv")
+        #expect(first.pathExtension == "csv")
+        #expect(try Data(contentsOf: first) == ShotCSV.data(rows: rows, unit: .celsius))
+
+        let second = try ShotCSV.writeFile(rows: rows, unit: .fahrenheit, on: try date(2026, 10, 31), in: folder)
+        let files = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        #expect(files == ["PullState-Shots-2026-10-31.csv"])
+        #expect(try Data(contentsOf: second) == ShotCSV.data(rows: rows, unit: .fahrenheit))
+    }
 }

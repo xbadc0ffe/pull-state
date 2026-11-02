@@ -31,34 +31,23 @@ struct HardwareDetailView: View {
             PSPageBackground()
             VStack(spacing: 0) {
                 PSNavBar(title: editing ? "Edit \(item?.kind.singular.lowercased() ?? "item")" : (item?.kind.singular ?? "Hardware")) {
-                    PSIconBtn(systemName: "chevron.left", label: "Back", action: { dismiss() })
+                    if editing {
+                        PSNavTextButton(title: "Cancel", muted: true) { editing = false }
+                    } else {
+                        PSNavBackButton { dismiss() }
+                    }
                 } trailing: {
                     if let item {
                         if editing {
-                            HStack(spacing: 6) {
-                                Button("Cancel") { editing = false }
-                                    .foregroundStyle(palette.inkSoft)
-                                    .font(PSFont.body(14))
-                                    .buttonStyle(.plain)
-                                Button("Save") {
-                                    commit(into: item)
-                                    editing = false
-                                }
-                                .foregroundStyle(.white)
-                                .font(PSFont.body(13, weight: .bold))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(palette.accent, in: Capsule())
-                                .buttonStyle(.plain)
+                            PSNavSaveButton {
+                                commit(into: item)
+                                editing = false
                             }
                         } else {
-                            Button("Edit") {
+                            PSNavTextButton(title: "Edit", weight: .semibold) {
                                 load(from: item)
                                 editing = true
                             }
-                            .foregroundStyle(palette.accent)
-                            .font(PSFont.body(14, weight: .semibold))
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -111,7 +100,7 @@ struct HardwareDetailView: View {
         if editing {
             PSEditablePhotoHeader(data: $dPhotoData, label: item.kind.singular.uppercased())
         } else {
-            PSPhotoThumb(data: item.photoData, label: item.kind.singular.uppercased(), radius: 14, hero: true)
+            PSPhotoThumb(data: item.photo, label: item.kind.singular.uppercased(), radius: 14, hero: true)
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
         }

@@ -23,59 +23,36 @@ struct RecipeSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 10) {
                 if editing {
-                    Button("Cancel") {
+                    PSNavTextButton(title: "Cancel", muted: true) {
                         if dirty {
                             showDiscardAlert = true
                         } else {
                             editing = false
                         }
                     }
-                    .font(PSFont.body(14))
-                    .foregroundStyle(palette.inkSoft)
-                    .buttonStyle(.plain)
                 } else {
-                    Button("Edit") {
+                    PSNavTextButton(title: "Edit", weight: .semibold) {
                         draft = bean.recipe
                         editing = true
                     }
-                    .font(PSFont.body(14, weight: .semibold))
-                    .foregroundStyle(palette.accent)
-                    .buttonStyle(.plain)
                 }
                 Spacer()
                 if editing {
-                    Button("Save") {
+                    PSNavSaveButton(enabled: dirty) {
                         bean.recipe = draft
                         try? context.save()
                         editing = false
                     }
-                    .font(PSFont.body(13, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(palette.accent, in: Capsule())
-                    .buttonStyle(.plain)
-                    .disabled(!dirty)
-                    .opacity(dirty ? 1 : 0.6)
                 }
-                Button {
+                PSNavCloseButton {
                     if editing && dirty {
                         showDiscardAlert = true
                     } else {
                         onClose()
                     }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(palette.inkSoft)
-                        .frame(width: 32, height: 32)
-                        .background(palette.surfaceAlt, in: Circle())
-                        .overlay(Circle().strokeBorder(palette.line, lineWidth: 0.5))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close")
             }
             .padding(.horizontal, 18)
             .padding(.top, 12)

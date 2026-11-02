@@ -22,6 +22,8 @@ final class Shot {
     var notes: String
     var usedPaperFilter: Bool = false
     @Attribute(.externalStorage) var photoData: Data?
+    /// `photoData` for display; nil once the shot is deleted (see `isDetached`).
+    var photo: Data? { isDetached ? nil : photoData }
 
     var bean: Bean?
     var machine: Equipment?

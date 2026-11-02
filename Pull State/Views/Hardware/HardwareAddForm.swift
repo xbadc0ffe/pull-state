@@ -36,15 +36,9 @@ struct HardwareAddForm: View {
             PSPageBackground()
             VStack(spacing: 0) {
                 PSNavBar(title: kind.addLabel) {
-                    Button("Cancel", action: onCancel)
-                        .font(PSFont.body(14))
-                        .foregroundStyle(palette.accent)
-                        .buttonStyle(.plain)
+                    PSNavTextButton(title: "Cancel", action: onCancel)
                 } trailing: {
-                    Button("Save", action: save)
-                        .font(PSFont.body(14, weight: .bold))
-                        .foregroundStyle(palette.accent)
-                        .buttonStyle(.plain)
+                    PSNavTextButton(title: "Save", weight: .bold, action: save)
                 }
                 .psContentColumn()
 

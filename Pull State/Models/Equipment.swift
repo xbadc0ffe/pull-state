@@ -13,6 +13,8 @@ final class Equipment {
     var kindRaw: String
     var createdAt: Date
     @Attribute(.externalStorage) var photoData: Data?
+    /// `photoData` for display; nil once the item is deleted (see `isDetached`).
+    var photo: Data? { isDetached ? nil : photoData }
 
     @Relationship(deleteRule: .nullify, inverse: \Shot.machine)
     var machineShots: [Shot] = []

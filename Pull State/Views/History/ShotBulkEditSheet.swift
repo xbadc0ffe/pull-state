@@ -43,10 +43,7 @@ struct ShotBulkEditSheet: View {
             HStack {
                 PSDisplay("Edit \(shotsLabel)", size: 20)
                 Spacer()
-                Button("Close", action: onClose)
-                    .font(PSFont.body(14))
-                    .foregroundStyle(palette.inkSoft)
-                    .buttonStyle(.plain)
+                PSNavTextButton(title: "Close", muted: true, action: onClose)
             }
             .padding(.horizontal, 18)
             .padding(.top, 14)

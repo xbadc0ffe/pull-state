@@ -1,14 +1,16 @@
 import SwiftUI
 import SwiftData
 
-/// About sheet presented from any tab's "…" icon. Houses the identity card
-/// (Built by / Contact / GitHub / Temperature / Appearance switches), the
-/// non-consumable tip-jar IAP, a footer tagline, and — at the very bottom —
-/// "Your data": Export shots (CSV via the share sheet, `ShotCSVExport`) and
-/// Wipe Data (pick a `WipeScope`, then two confirmations in a row). The
-/// app-wide `StoreManager` (from the environment) owns the StoreKit state;
-/// this sheet mirrors its `tipEntitled` into `AppSettings.hasTipped`, so a
-/// re-installed user keeps the "tipped" state without re-purchasing.
+/// About sheet presented from any tab's "…" icon. Houses the settings card
+/// (Built by / Contact / GitHub / Temperature / Appearance / Recipe
+/// Suggestions, then an Export Shots row), the red Wipe Data button, the
+/// non-consumable tip-jar IAP and a footer tagline. Export Shots asks
+/// "Export N shots as a CSV table?" and then shares a real `.csv` file
+/// (`ShotCSV.writeFile` + `ShareSheetPresenter`); Wipe Data picks a
+/// `WipeScope`, then asks twice. The app-wide `StoreManager` (from the
+/// environment) owns the StoreKit state; this sheet mirrors its
+/// `tipEntitled` into `AppSettings.hasTipped`, so a re-installed user keeps
+/// the "tipped" state without re-purchasing.
 struct AboutSheet: View {
     @Bindable var settings: AppSettings
     @Environment(\.psPalette) private var palette
@@ -19,28 +21,24 @@ struct AboutSheet: View {
     @State private var restoreMessage: String?
     @State private var restoreFailed = false
 
+    @State private var showExportConfirm = false
+    /// The written CSV file; setting it opens the share sheet.
+    @State private var exportFile: URL?
+
     @State private var showWipeChooser = false
     @State private var showWipeConfirm = false
     @State private var showWipeFinal = false
     @State private var wipeScope: WipeScope? = nil
-    @State private var wipeMessage: String?
-    @State private var wipeFailed = false
+    /// Result line under Wipe Data: a finished wipe, or a failed export/wipe.
+    @State private var dataMessage: String?
+    @State private var dataMessageFailed = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
                 HStack {
                     Spacer()
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(palette.inkSoft)
-                            .frame(width: 32, height: 32)
-                            .background(palette.surfaceAlt, in: Circle())
-                            .overlay(Circle().strokeBorder(palette.line, lineWidth: 0.5))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
+                    PSNavCloseButton { dismiss() }
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 12)
@@ -99,16 +97,21 @@ struct AboutSheet: View {
                                 set: { settings.appearance = $0 }
                             ))
                         }
-                        PSField(label: "Recipe Suggestions", last: true) {
+                        PSField(label: "Recipe Suggestions") {
                             PSToggle(isOn: Binding(
                                 get: { settings.autoRecipePromptEnabled },
                                 set: { settings.autoRecipePromptEnabled = $0 }
                             ))
                         }
+                        exportRow
                     }
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 10)
+
+                wipeSection
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
 
                 // Tip jar
                 Button {
@@ -233,10 +236,6 @@ struct AboutSheet: View {
                         .padding(.horizontal, 18)
                 }
 
-                yourDataSection
-                    .padding(.horizontal, 18)
-                    .padding(.top, 26)
-
                 Spacer(minLength: 24)
             }
             .psContentColumn()
@@ -274,21 +273,79 @@ struct AboutSheet: View {
         try? context.save()
     }
 
-    // MARK: - Your data
+    // MARK: - Export Shots
 
-    @ViewBuilder
-    private var yourDataSection: some View {
-        PSSection("Your data") {
-            VStack(spacing: 10) {
-                exportCard
-                wipeButton
-                if let wipeMessage {
-                    Text(wipeMessage)
-                        .font(PSFont.body(11))
-                        .foregroundStyle(wipeFailed ? palette.bad : palette.inkSoft)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                }
+    /// Last row of the settings card. Asks first; on Export the CSV file is
+    /// written and the share sheet opens (anchored here on iPad).
+    private var exportRow: some View {
+        Button {
+            dataMessage = nil
+            showExportConfirm = true
+        } label: {
+            PSField(label: "Export Shots", last: true) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(shots.isEmpty ? palette.inkMuted : palette.accent)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(ShareSheetPresenter(fileURL: exportFile) { exportFile = nil })
+        .accessibilityLabel("Export Shots")
+        .accessibilityHint(shots.isEmpty
+                           ? "No shots to export yet."
+                           : "Shares \(countLabel(shots.count, "shot")) as a CSV table.")
+        .alert(exportTitle, isPresented: $showExportConfirm) {
+            if shots.isEmpty {
+                Button("OK", role: .cancel) {}
+            } else {
+                Button("Cancel", role: .cancel) {}
+                Button("Export", action: exportShots)
+            }
+        } message: {
+            Text(exportMessage)
+        }
+    }
+
+    private var exportTitle: String {
+        shots.isEmpty
+            ? "No shots to export yet"
+            : "Export \(countLabel(shots.count, "shot")) as a CSV table?"
+    }
+
+    private var exportMessage: String {
+        shots.isEmpty
+            ? "Log a shot first, then export your history here."
+            : "Creates \(ShotCSV.fileName(on: .now)), a table you can save to Files, send, or open in Excel, Numbers or Google Sheets. Photos aren't included."
+    }
+
+    /// Writes the file, then opens the share sheet once the alert has gone.
+    /// `exportFile` is cleared first so the new file always counts as a change.
+    private func exportShots() {
+        exportFile = nil
+        do {
+            let url = try ShotCSV.writeFile(
+                rows: shots.map(ShotCSVRow.init(shot:)),
+                unit: settings.temperatureUnit
+            )
+            present { exportFile = url }
+        } catch {
+            dataMessageFailed = true
+            dataMessage = "Couldn't create the export file. Please try again."
+        }
+    }
+
+    // MARK: - Wipe Data
+
+    private var wipeSection: some View {
+        VStack(spacing: 8) {
+            wipeButton
+            if let dataMessage {
+                Text(dataMessage)
+                    .font(PSFont.body(11))
+                    .foregroundStyle(dataMessageFailed ? palette.bad : palette.inkSoft)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
             }
         }
         .alert(wipeConfirmTitle, isPresented: $showWipeConfirm) {
@@ -301,57 +358,9 @@ struct AboutSheet: View {
         }
     }
 
-    /// Shares the whole history as a CSV file. The file is only built when
-    /// the share sheet asks for it (see `ShotCSVExport`).
-    private var exportCard: some View {
-        ShareLink(
-            item: ShotCSVExport(
-                container: context.container,
-                unitRaw: settings.temperatureUnitRaw,
-                fileName: ShotCSV.fileName(on: .now)
-            ),
-            preview: SharePreview("Pull State shot history", image: Image(systemName: "tablecells"))
-        ) {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(palette.accentSoft)
-                        .frame(width: 42, height: 42)
-                    Image(systemName: "tablecells")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(palette.accent)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Export shots")
-                        .font(PSFont.body(14.5, weight: .bold))
-                        .foregroundStyle(palette.ink)
-                    Text(shots.isEmpty
-                         ? "No shots to export yet."
-                         : "\(countLabel(shots.count, "shot")) as a CSV table for Excel, Numbers or Sheets.")
-                        .font(PSFont.body(12))
-                        .foregroundStyle(palette.inkSoft)
-                        .multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(shots.isEmpty ? palette.inkMuted : palette.accent)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(palette.lineStrong, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(shots.isEmpty)
-    }
-
     private var wipeButton: some View {
         Button {
-            wipeMessage = nil
+            dataMessage = nil
             showWipeChooser = true
         } label: {
             HStack(spacing: 8) {
@@ -426,15 +435,15 @@ struct AboutSheet: View {
         }
         do {
             try DataWiper.wipe(scope, in: context, settings: settings)
-            wipeFailed = false
-            wipeMessage = scope.doneMessage
+            dataMessageFailed = false
+            dataMessage = scope.doneMessage
         } catch {
-            wipeFailed = true
-            wipeMessage = "Couldn't wipe your data. Please try again."
+            dataMessageFailed = true
+            dataMessage = "Couldn't wipe your data. Please try again."
         }
     }
 
-    /// Shows the next dialog in the wipe chain once the previous one has
+    /// Shows the next dialog (or the share sheet) once the previous alert has
     /// finished animating away; presenting immediately can be dropped.
     private func present(_ show: @escaping () -> Void) {
         Task {

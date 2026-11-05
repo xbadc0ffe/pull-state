@@ -70,6 +70,8 @@ struct ShotCard: View {
                         .font(PSFont.mono(9.5))
                         .tracking(0.6)
                         .foregroundStyle(palette.inkMuted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
 
                 Spacer(minLength: 0)

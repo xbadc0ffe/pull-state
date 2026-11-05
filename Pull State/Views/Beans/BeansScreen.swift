@@ -18,7 +18,7 @@ struct BeansScreen: View {
                      large: true) {
                 EmptyView()
             } trailing: {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     PSIconBtn(systemName: "plus", label: "Add bean", action: onAdd)
                     PSIconBtn(systemName: "ellipsis", label: "More", action: onShowAbout)
                 }

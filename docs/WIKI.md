@@ -33,8 +33,8 @@ pull-state/
 │   ├── WIKI.md               this file
 │   ├── AUDIT-YYYY-MM-DD.md   dated audit reports; newest is the open backlog
 │   └── privacy.html          privacy policy published via GitHub Pages
-├── branding/                 app icons, logo, App Store screenshots
-└── design/                   original Claude Design mockups (HTML/PDF/zip)
+├── branding/                 app icon sources (light/dark) and the badc0ffe logo
+└── design/                   the original Claude Design prototype (one handoff zip: HTML + JSX)
 ```
 
 ### Source tree (`Pull State/`)
@@ -61,7 +61,7 @@ pull-state/
 
 1. **One `NavigationStack`** in `MainTabView`; all four tab screens stay mounted (opacity-switched) so Log state survives tab changes; detail screens push via `NavRoute(PersistentIdentifier)` and render their own `PSNavBar`.
 2. **Design system via environment.** `\.psPalette` (resolved from `colorScheme`) and `\.psTempUnit` are injected once in `MainTabView`. Sheets do not inherit environment: every `.sheet { }` re-applies both.
-3. **SwiftData, local only.** Four models, cascade on bean→shots, nullify on equipment→shots. Photos use `@Attribute(.externalStorage)`. `AppSettings` is a singleton row created by `SeedData`.
+3. **SwiftData, local only.** Four models; bean→shots and equipment→shots are both nullify, and deleting a bean files its shots under "Unknown" (`ShotReassignment.deleteBean`). Photos use `@Attribute(.externalStorage)`. `AppSettings` is a singleton row created by `SeedData`.
 4. **`Recipe` is a Codable value** stored as JSON on `Bean`; every field optional, nil means "not specified". Temperatures are stored in Celsius everywhere and converted only at the UI edge.
 5. **Four deliberate UIKit exceptions** live in `Utilities/` (swipe-back, select-all-on-focus, share sheet) and `SliderField` (pan recognizer). Everything else is SwiftUI.
 
@@ -76,7 +76,7 @@ Read DESIGN.md §2–§6 before changing navigation, the data model, the recipe-
 - New persisted properties on a `@Model` **must carry an inline default** (`var foo: Bool = false`) so SwiftData lightweight migration backfills existing rows.
 - Never call `.navigationBarBackButtonHidden(true)`; it kills the swipe-back gesture.
 - Every photo entry point goes through `PSPhotoSourceMenu` → `PSPhotoCropSheet` (square JPEG).
-- Strings are English-only and hard-coded; date formats are fixed `yyyy-MM-dd HH:mm`.
+- Strings are English-only and hard-coded. Dates on screen go through `PSFmt`, which follows the phone's region and 12/24-hour setting; only the CSV export keeps fixed ISO dates (`yyyy-MM-dd HH:mm`).
 - Fonts go through `PSFont` (Dynamic Type scaled, capped 1.5×); every `PSIconBtn` needs an accessibility label; `PSToggle` takes one too.
 - Sub-page top bars use the compact `PSNavBar` with `PSNavBackButton` / `PSNavTextButton` / `PSNavSaveButton` (`PSNavMetrics` sizes: 48 pt buttons, 22 pt title, 21 pt actions); don't hand-roll small header buttons.
 - Views **show** photos through the models' `photo`, never `photoData`: once a model is deleted and saved, loading its external-storage photo is a fatal SwiftData error, and SwiftUI may redraw a card for it one last time (DESIGN.md §4.1, §10.3).
@@ -122,7 +122,7 @@ The shared scheme already selects `PullState.storekit` (Run → Options → Stor
 | 1.2 | Full-width scroll, editable photo headers, paper-filter filter, light/dark icons |
 | 1.3 | Data protection entitlement, pre-infusion pressure, recipe-prompt toggle, slider scroll passthrough |
 | 1.4 | Pre-infusion pressure slider range, pull pressure label, Restore Purchases, version read from bundle |
-| 26.1.5 | First release on the `<YY>.<major>.<minor>` scheme; its first TestFlight builds (202610302343, 202611012216) were labelled 1.5. Documentation pass (audit, wiki, CLAUDE.md), then the audit cleanup: Log state survives tab switches, °F recipe fix, notes no longer select-all, downscaled + cached photos, StoreKit transaction listener, Dynamic Type, accessibility, iOS-only build config, Swift 6, unit tests. Then (30 Oct) logging without setup: Source rows always shown and pulsing until set up, "+ New …" in every picker, hardware optional, bean named at save time (blank = "Unknown"); re-filing shots later (Shot edit with None / + New / grind, History Select → bulk edit, backfill offer when hardware is added, empty "Unknown" bean tidied away); About → Export shots (CSV) and Wipe Data (three scopes, double confirmation). Then (1 Nov, TestFlight feedback on build 202610302343): Export Shots became a row under Recipe Suggestions that asks first and shares a real `.csv` file, Wipe Data moved right under it; the Wipe Data crash (deleted hardware's photo read during a redraw) fixed via the display-safe `photo`; sub-page top bars 1.5× larger, with Cancel replacing Back while editing. Then (4 Nov): renamed 1.5 → 26.1.5; About gained a **Website** row (badc0ffe.net) between Built by and Contact |
+| 26.1.5 | First release on the `<YY>.<major>.<minor>` scheme; its first TestFlight builds (202610302343, 202611012216) were labelled 1.5. Documentation pass (audit, wiki, CLAUDE.md), then the audit cleanup: Log state survives tab switches, °F recipe fix, notes no longer select-all, downscaled + cached photos, StoreKit transaction listener, Dynamic Type, accessibility, iOS-only build config, Swift 6, unit tests. Then (30 Oct) logging without setup: Source rows always shown and pulsing until set up, "+ New …" in every picker, hardware optional, bean named at save time (blank = "Unknown"); re-filing shots later (Shot edit with None / + New / grind, History Select → bulk edit, backfill offer when hardware is added, empty "Unknown" bean tidied away); About → Export shots (CSV) and Wipe Data (three scopes, double confirmation). Then (1 Nov, TestFlight feedback on build 202610302343): Export Shots became a row under Recipe Suggestions that asks first and shares a real `.csv` file, Wipe Data moved right under it; the Wipe Data crash (deleted hardware's photo read during a redraw) fixed via the display-safe `photo`; sub-page top bars 1.5× larger, with Cancel replacing Back while editing. Then (4 Nov): renamed 1.5 → 26.1.5; About gained a **Website** row (badc0ffe.net) between Built by and Contact. Then (4 Nov, the audit's open decisions): deleting a bean keeps its shots under "Unknown" (bean→shots is now `.nullify`); dates follow the phone's region and 12/24-hour setting; the tab screens' "…", "+", Select and "+ Add" buttons are 1.5× larger; the App Store screenshots and duplicate design files left the repo |
 
 ---
 
@@ -136,12 +136,14 @@ The shared scheme already selects `PullState.storekit` (Run → Options → Stor
 | Tweak colours or type | `Resources/Theme.swift` |
 | Timer behaviour | `LogScreen` state machine + `DualTrackTimer` (DESIGN.md §6) |
 | Saving with no setup, the bean-name prompt | `LogScreen.save` / `saveWithQuickBean`, `Bean.quickAdd` (DESIGN.md §3.1) |
+| Deleting a bean (shots move to "Unknown") | `ShotReassignment.deleteBean`, `BeanDetailView.deleteMessage` (DESIGN.md §3.3, §4) |
+| Date formats | `PSFmt` in `Resources/Theme.swift` (tests in `ModelAndFormatTests`; DESIGN.md §5.2) |
 | Moving shots between beans / hardware | `Utilities/ShotReassignment.swift`, `ShotDetailView` edit mode, `ShotBulkEditSheet`, `HardwareAddForm` backfill (DESIGN.md §3.2, §3.4) |
 | CSV export columns / format | `Utilities/ShotCSV.swift` (tests in `ShotCSVTests`; DESIGN.md §10.3) |
 | How the export reaches the share sheet | `AboutSheet.exportRow` / `exportShots`, `Utilities/ShareSheet.swift` (DESIGN.md §10.3, §15.5) |
 | Wipe Data | `Utilities/DataWiper.swift`, `AboutSheet` Wipe Data button (DESIGN.md §10.3; UI-level tests in `LiveDeleteTests`) |
 | A crash reading a photo after a delete | `Models/PersistentModel+Detached.swift`; show photos via `photo` (DESIGN.md §4.1) |
-| Sub-page top bar sizes and layout | `Views/Components/PSNavBar.swift` (`PSNavMetrics`, DESIGN.md §5.3) |
+| Top bar sizes and layout (tabs and sub-pages) | `Views/Components/PSNavBar.swift` (`PSNavMetrics`, DESIGN.md §5.3) |
 | Reading TestFlight crash reports on this server | App Store Connect API with the `ship` key: `GET /v1/apps/{id}/betaFeedbackCrashSubmissions`, then `/v1/betaFeedbackCrashSubmissions/{id}/crashLog` (already symbolicated). Pull State's app id is 6765922700 |
 | Hardware autocomplete list | `Utilities/HardwareCatalog.swift` |
 | IAP | `Utilities/StoreManager.swift`, `AboutSheet`, `PullState.storekit` |

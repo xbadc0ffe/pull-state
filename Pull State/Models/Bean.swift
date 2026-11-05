@@ -1,8 +1,11 @@
 import Foundation
 import SwiftData
 
-/// One bag of coffee. Owns its shot history (cascade-deleted with the bean) and
-/// carries a per-bag recipe stored as JSON `Data` (see `Recipe`). `bagNumber`
+/// One bag of coffee, its shot history and a per-bag recipe stored as JSON
+/// `Data` (see `Recipe`). Deleting a bean keeps its shots: the Bean page
+/// deletes through `ShotReassignment.deleteBean`, which files them under the
+/// "Unknown" placeholder first, and the relationship is `.nullify` so no other
+/// path can take shots with it. `bagNumber`
 /// is monotonic via `AppSettings.nextBagNumber` and is never decremented when a
 /// bean is deleted, so historical references in shot history stay stable.
 ///
@@ -36,7 +39,7 @@ final class Bean {
 
     private var recipeData: Data?
 
-    @Relationship(deleteRule: .cascade, inverse: \Shot.bean)
+    @Relationship(deleteRule: .nullify, inverse: \Shot.bean)
     var shots: [Shot] = []
 
     init(

@@ -84,14 +84,29 @@ struct FormatterTests {
         #expect(PSFmt.number(.infinity) == "—")
     }
 
-    @Test func fixedDatePatterns() {
+    /// Dates follow the region and the 12/24-hour setting. (ICU puts a
+    /// narrow no-break space, U+202F, before AM/PM.)
+    @Test func datesFollowTheRegion() throws {
         var comps = DateComponents()
         comps.year = 2026; comps.month = 10; comps.day = 27; comps.hour = 8; comps.minute = 5; comps.second = 9
-        let date = Calendar.current.date(from: comps)!
-        #expect(PSFmt.shortDate(date) == "2026-10-27")
-        #expect(PSFmt.shortDateMono(date) == "10-27")
-        #expect(PSFmt.cardDate(date) == "2026-10-27 08:05")
-        #expect(PSFmt.detailDate(date) == "2026-10-27 · 08:05:09")
+        let date = try #require(Calendar.current.date(from: comps))
+        let us = Locale(identifier: "en_US")
+        let uk = Locale(identifier: "en_GB")
+        var components = Locale.Components(identifier: "en_US")
+        components.hourCycle = .zeroToTwentyThree
+        let us24 = Locale(components: components)
+
+        #expect(PSFmt.shortDate(date, locale: us) == "Oct 27, 2026")
+        #expect(PSFmt.shortDate(date, locale: uk) == "27 Oct 2026")
+        #expect(PSFmt.longDate(date, locale: us) == "October 27, 2026")
+        #expect(PSFmt.longDate(date, locale: uk) == "27 October 2026")
+        #expect(PSFmt.shortDateMono(date, locale: us) == "10/27")
+        #expect(PSFmt.shortDateMono(date, locale: uk) == "27/10")
+        #expect(PSFmt.cardDate(date, locale: us) == "Oct 27, 2026 · 8:05\u{202F}AM")
+        #expect(PSFmt.cardDate(date, locale: uk) == "27 Oct 2026 · 08:05")
+        #expect(PSFmt.cardDate(date, locale: us24) == "Oct 27, 2026 · 08:05")
+        #expect(PSFmt.detailDate(date, locale: us) == "Oct 27, 2026 · 8:05:09\u{202F}AM")
+        #expect(PSFmt.detailDate(date, locale: uk) == "27 Oct 2026 · 08:05:09")
     }
 }
 

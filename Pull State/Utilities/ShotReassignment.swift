@@ -6,6 +6,8 @@
 // editing a selection (History → Select), and back-filling a newly added
 // machine or grinder onto every shot that has none (HardwareAddForm). All
 // three write through here so the "Unknown" clean-up happens the same way.
+// Deleting a bean (BeanDetailView) also goes through here: its shots are
+// filed under "Unknown" instead of being deleted.
 import Foundation
 import SwiftData
 
@@ -61,6 +63,38 @@ enum ShotReassignment {
             }
         }
         if removed { try? context.save() }
+    }
+
+    /// Deletes `bean` and keeps its shots: they move to the "Unknown"
+    /// placeholder (the existing one, or a new one with the next bag
+    /// number), where Shot edit or History's bulk edit can re-file them.
+    /// Deleting the placeholder itself also deletes its shots, since there
+    /// is nowhere left to file them. The Bean page's confirmation says which.
+    static func deleteBean(_ bean: Bean, in context: ModelContext, settings: AppSettings?) {
+        let shots = bean.shots
+        if bean.isPlaceholder {
+            for shot in shots { context.delete(shot) }
+        } else if !shots.isEmpty {
+            let unknown = unknownBean(in: context) ?? insertUnknownBean(in: context, settings: settings)
+            for shot in shots { shot.bean = unknown }
+        }
+        context.delete(bean)
+        try? context.save()
+    }
+
+    /// The placeholder ("Unknown") bean with the lowest bag number, if any.
+    static func unknownBean(in context: ModelContext) -> Bean? {
+        let beans = (try? context.fetch(FetchDescriptor<Bean>())) ?? []
+        return beans.filter(\.isPlaceholder).min { $0.bagNumber < $1.bagNumber }
+    }
+
+    /// A new "Unknown" placeholder with the next bag number.
+    private static func insertUnknownBean(in context: ModelContext, settings: AppSettings?) -> Bean {
+        let bagNumber = settings?.nextBagNumber ?? 1
+        let unknown = Bean.quickAdd(name: "", bagNumber: bagNumber)
+        context.insert(unknown)
+        settings?.nextBagNumber = bagNumber + 1
+        return unknown
     }
 
     /// Shots with no item of `kind` attached: logged before any machine or

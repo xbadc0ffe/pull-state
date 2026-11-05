@@ -135,9 +135,12 @@ struct PSFont {
     }
 }
 
-/// Date, duration and number formatters used by every screen. Formatters are
-/// cached — `DateFormatter` construction is expensive enough to matter inside
-/// list rows.
+/// Duration, number and date formatters used by every screen. Dates follow
+/// the phone's region and its 12/24-hour setting: "Oct 27, 2026 · 8:05 AM"
+/// in the US, "27 Oct 2026 · 08:05" in the UK. Month names stay English, the
+/// app's only language. `Date.FormatStyle` caches its formatters, so these
+/// are cheap in list rows. The CSV export keeps fixed ISO dates for
+/// spreadsheets (`ShotCSV`). Tests pass `locale`; the app uses the default.
 enum PSFmt {
     static func seconds(_ s: Double) -> String {
         guard s.isFinite else { return "0.0s" }
@@ -154,27 +157,29 @@ enum PSFmt {
         return d == d.rounded() ? "\(Int(d))" : String(format: "%.1f", d)
     }
 
-    static func shortDate(_ d: Date) -> String { shortDateFormatter.string(from: d) }
-    static func longDate(_ d: Date) -> String { longDateFormatter.string(from: d) }
-    static func shortDateMono(_ d: Date) -> String { shortDateMonoFormatter.string(from: d) }
-    static func cardDate(_ d: Date) -> String { cardDateFormatter.string(from: d) }
-    static func detailDate(_ d: Date) -> String { detailDateFormatter.string(from: d) }
+    /// "Oct 27, 2026" / "27 Oct 2026". Hardware "Date added".
+    static func shortDate(_ d: Date, locale: Locale = .autoupdatingCurrent) -> String {
+        d.formatted(Date.FormatStyle(locale: locale).year().month(.abbreviated).day())
+    }
 
-    private static let shortDateFormatter: DateFormatter = fixed("yyyy-MM-dd")
-    private static let shortDateMonoFormatter: DateFormatter = fixed("MM-dd")
-    private static let cardDateFormatter: DateFormatter = fixed("yyyy-MM-dd HH:mm")
-    private static let detailDateFormatter: DateFormatter = fixed("yyyy-MM-dd · HH:mm:ss")
-    private static let longDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .long
-        f.timeStyle = .none
-        return f
-    }()
+    /// "October 27, 2026" / "27 October 2026". Bean roast and purchase dates.
+    static func longDate(_ d: Date, locale: Locale = .autoupdatingCurrent) -> String {
+        d.formatted(Date.FormatStyle(date: .long, time: .omitted, locale: locale))
+    }
 
-    private static func fixed(_ pattern: String) -> DateFormatter {
-        let f = DateFormatter()
-        f.dateFormat = pattern
-        return f
+    /// "10/27" / "27/10". Rating-chart point labels.
+    static func shortDateMono(_ d: Date, locale: Locale = .autoupdatingCurrent) -> String {
+        d.formatted(Date.FormatStyle(locale: locale).month(.defaultDigits).day())
+    }
+
+    /// "Oct 27, 2026 · 8:05 AM" / "27 Oct 2026 · 08:05". Shot cards.
+    static func cardDate(_ d: Date, locale: Locale = .autoupdatingCurrent) -> String {
+        "\(shortDate(d, locale: locale)) · \(d.formatted(Date.FormatStyle(locale: locale).hour().minute()))"
+    }
+
+    /// "Oct 27, 2026 · 8:05:09 AM" / "27 Oct 2026 · 08:05:09". Shot detail.
+    static func detailDate(_ d: Date, locale: Locale = .autoupdatingCurrent) -> String {
+        "\(shortDate(d, locale: locale)) · \(d.formatted(Date.FormatStyle(locale: locale).hour().minute().second()))"
     }
 }
 

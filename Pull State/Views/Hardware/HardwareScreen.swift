@@ -44,17 +44,19 @@ struct HardwareScreen: View {
                 PSDisplay(title, size: 20)
                 Spacer()
                 Button { onAdd(kind) } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         Image(systemName: "plus")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: 16, weight: .bold))
                         Text("Add")
-                            .font(PSFont.body(12, weight: .semibold))
+                            .font(PSFont.body(18, weight: .semibold))
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 8)
                     .foregroundStyle(palette.accentDeep)
                     .background(palette.accentSoft, in: Capsule())
                     .overlay(Capsule().strokeBorder(palette.accent, lineWidth: 0.5))
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }

@@ -109,9 +109,10 @@ struct LiveDeleteTests {
         #expect(fixture.settings.hasCompletedOnboarding == (scope != .everything))
     }
 
-    /// The detail pages' Delete buttons: delete, save, and the tab list
-    /// underneath still holds the card. (These never crashed, even before
-    /// `photo`; they guard the same path.)
+    /// The detail pages' Delete buttons: delete the way each page does, save,
+    /// and the tab list underneath still holds the card. A deleted bean's
+    /// shot survives, filed under a new "Unknown" bean. (These never
+    /// crashed, even before `photo`; they guard the same path.)
     @Test(arguments: Target.allCases)
     func deletingOneItemUnderTheMainScreens(target: Target) async throws {
         let fixture = try makeFixture()
@@ -120,13 +121,16 @@ struct LiveDeleteTests {
 
         switch target {
         case .machine: fixture.context.delete(fixture.machine)
-        case .bean: fixture.context.delete(fixture.bean)
+        case .bean: ShotReassignment.deleteBean(fixture.bean, in: fixture.context, settings: fixture.settings)
         case .shot: fixture.context.delete(fixture.shot)
         }
         try fixture.context.save()
         try await Task.sleep(for: .seconds(1))
 
         #expect(try fixture.count(Equipment.self) == (target == .machine ? 1 : 2))
-        #expect(try fixture.count(Shot.self) == (target == .machine ? 1 : 0))
+        #expect(try fixture.count(Shot.self) == (target == .shot ? 0 : 1))
+        if target == .bean {
+            #expect(fixture.shot.bean?.name == "Unknown")
+        }
     }
 }

@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// Circular icon button used in nav bars. `label` is the VoiceOver name and
-/// is required at every call site — an SF Symbol name like "ellipsis" is not
+/// Circular icon button used in nav bars, 48 pt (`PSNavMetrics.button`) on
+/// tab screens and sub-pages alike. `label` is the VoiceOver name and is
+/// required at every call site — an SF Symbol name like "ellipsis" is not
 /// an acceptable accessibility label.
 struct PSIconBtn: View {
     let systemName: String
     let label: String
-    var size: CGFloat = 32
+    var size: CGFloat = PSNavMetrics.button
     let action: () -> Void
     @Environment(\.psPalette) private var palette
 

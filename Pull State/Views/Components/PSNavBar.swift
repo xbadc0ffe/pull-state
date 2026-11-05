@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Top bar for every screen. `large` is the tab-screen style: small icon
+/// Top bar for every screen. `large` is the tab-screen style: 48 pt icon
 /// buttons in a row with a big serif title underneath. The default compact
 /// style is for sub-pages (detail pages, add forms): leading and trailing
 /// controls at the edges and the title centred between them.
@@ -39,7 +39,7 @@ struct PSNavBar<Leading: View, Trailing: View>: View {
                     Spacer()
                     HStack(spacing: 8) { trailing() }
                 }
-                .frame(minHeight: 36)
+                .frame(minHeight: PSNavMetrics.button)
 
                 VStack(alignment: .leading, spacing: 4) {
                     PSDisplay(title, size: 32, weight: .semibold)
@@ -73,10 +73,11 @@ struct PSNavBar<Leading: View, Trailing: View>: View {
 }
 
 /// Sizes for compact (sub-page) nav bars and sheet headers: 1.5× the
-/// original 32 pt buttons, 15 pt title and 14 pt text actions. Text sizes
-/// still scale with Dynamic Type through `PSFont`.
+/// original 32 pt buttons, 15 pt title and 14 pt text actions. The tab
+/// screens' icon buttons and History's Select use the same button and text
+/// sizes. Text sizes still scale with Dynamic Type through `PSFont`.
 enum PSNavMetrics {
-    /// Diameter of the round back and close buttons.
+    /// Diameter of every round nav-bar button (back, close, "…", "+").
     static let button: CGFloat = 48
     /// Centred page title.
     static let title: CGFloat = 22

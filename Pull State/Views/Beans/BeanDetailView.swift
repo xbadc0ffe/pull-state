@@ -4,8 +4,10 @@ import SwiftData
 /// Bean detail screen. Top-level Edit toggles every metadata field
 /// (name, roaster, origin/process/roast, dates, photo, notes) into edit mode;
 /// the recipe card has its own separate Edit flow so users can adjust a
-/// recipe inline without entering the full edit. Delete cascades the bean's
-/// shots — confirmation copy reflects the count.
+/// recipe inline without entering the full edit. Delete keeps the bean's
+/// shots and files them under "Unknown" (`ShotReassignment.deleteBean`);
+/// only deleting the "Unknown" placeholder itself takes its shots with it.
+/// The confirmation says which, with the count.
 ///
 /// A quick-added bean has no roast or process yet; view mode shows a hint
 /// instead, and edit mode leaves those pills unselected until one is picked.
@@ -18,6 +20,7 @@ struct BeanDetailView: View {
     @Environment(\.psPalette) private var palette
 
     @Query private var beans: [Bean]
+    @Query private var settingsQuery: [AppSettings]
     private var bean: Bean? { beans.first }
 
     @State private var editing = false
@@ -84,18 +87,12 @@ struct BeanDetailView: View {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
                 if let bean {
-                    context.delete(bean)
-                    try? context.save()
+                    ShotReassignment.deleteBean(bean, in: context, settings: settingsQuery.first)
                     dismiss()
                 }
             }
         } message: {
-            let count = bean?.shots.count ?? 0
-            if count == 0 {
-                Text("This bean will be removed.")
-            } else {
-                Text("All associated pulls will be deleted too. \(count) shot\(count == 1 ? "" : "s") will be removed.")
-            }
+            Text(deleteMessage)
         }
     }
 
@@ -404,6 +401,19 @@ struct BeanDetailView: View {
 
         deleteButton(for: bean)
             .padding(.top, 18)
+    }
+
+    /// Delete confirmation text. A bean's shots move to "Unknown"; the
+    /// "Unknown" placeholder's own shots are deleted with it.
+    private var deleteMessage: String {
+        let count = bean?.shots.count ?? 0
+        guard count > 0 else { return "This bean will be removed." }
+        let shots = count == 1 ? "Its shot" : "Its \(count) shots"
+        let them = count == 1 ? "it" : "them"
+        if bean?.isPlaceholder == true {
+            return "\(shots) will be deleted too. To keep \(them), move \(them) to another bean first (History → Select)."
+        }
+        return "\(shots) will be kept and moved to “Unknown”. You can re-file \(them) from History → Select."
     }
 
     @ViewBuilder

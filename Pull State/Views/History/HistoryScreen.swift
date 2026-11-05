@@ -103,12 +103,9 @@ struct HistoryScreen: View {
             } trailing: {
                 HStack(spacing: 10) {
                     if !shots.isEmpty {
-                        Button(selecting ? "Done" : "Select") {
+                        PSNavTextButton(title: selecting ? "Done" : "Select", weight: .semibold) {
                             if selecting { endSelecting() } else { selecting = true }
                         }
-                        .font(PSFont.body(14, weight: .semibold))
-                        .foregroundStyle(palette.accent)
-                        .buttonStyle(.plain)
                     }
                     PSIconBtn(systemName: "ellipsis", label: "More", action: onShowAbout)
                 }

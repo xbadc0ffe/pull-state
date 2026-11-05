@@ -4,7 +4,7 @@ A local-only espresso shot logbook for iPhone and iPad — for home baristas who
 
 ## Screenshots
 
-App Store screenshots for iPhone and iPad live in [`branding/`](branding/).
+See the [App Store listing](https://apps.apple.com/app/id6765922700).
 
 ## Features
 

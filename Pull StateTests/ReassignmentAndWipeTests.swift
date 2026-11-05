@@ -3,9 +3,10 @@ import SwiftData
 import Testing
 @testable import Pull_State
 
-/// Quick-added beans, moving shots between beans and hardware, and the
-/// "Unknown" clean-up. Runs against an in-memory store so relationship rules
-/// (inverses, cascade, nullify) behave exactly as in the app.
+/// Quick-added beans, moving shots between beans and hardware, the "Unknown"
+/// clean-up, and deleting a bean (its shots move to "Unknown"). Runs against
+/// an in-memory store so relationship rules (inverses, nullify) behave exactly
+/// as in the app.
 struct ShotReassignmentTests {
     private let container: ModelContainer
     private var context: ModelContext { container.mainContext }
@@ -127,6 +128,91 @@ struct ShotReassignmentTests {
         #expect(bare2.machine?.name == "Flair 58")
         #expect(owned.machine?.name == "Old")
         #expect(ShotReassignment.shotsMissing(.machine, in: context).isEmpty)
+    }
+
+    // MARK: Deleting a bean
+
+    @Test func deletingABeanFilesItsShotsUnderANewUnknown() throws {
+        let settings = AppSettings(nextBagNumber: 4)
+        let machine = Equipment(name: "Flair 58", brand: "Flair", kind: .machine)
+        let bean = fullBean("Black Gold", bag: 3)
+        let shots = [Shot(bean: bean, machine: machine, grindSetting: "22"), Shot(bean: bean)]
+        context.insert(settings)
+        context.insert(machine)
+        context.insert(bean)
+        for shot in shots { context.insert(shot) }
+        try context.save()
+
+        ShotReassignment.deleteBean(bean, in: context, settings: settings)
+
+        let unknown = try #require(ShotReassignment.unknownBean(in: context))
+        #expect(try beanNames() == ["Unknown"])
+        #expect(unknown.bagNumber == 4)
+        #expect(settings.nextBagNumber == 5)
+        #expect(unknown.shots.count == 2)
+        #expect(shots[0].machine?.name == "Flair 58")
+        #expect(shots[0].grindSetting == "22")
+
+        // Re-filing them later tidies "Unknown" away as usual.
+        let guji = fullBean("Guji", bag: 5)
+        context.insert(guji)
+        ShotReassignment.apply(bean: guji, machine: .keep, grinder: .keep, to: shots, in: context)
+        #expect(try beanNames() == ["Guji"])
+    }
+
+    @Test func deletingABeanReusesTheExistingUnknown() throws {
+        let settings = AppSettings(nextBagNumber: 3)
+        let unknown = Bean.quickAdd(name: "", bagNumber: 1)
+        let bean = fullBean("Black Gold", bag: 2)
+        context.insert(settings)
+        for b in [unknown, bean] { context.insert(b) }
+        for shot in [Shot(bean: unknown), Shot(bean: bean), Shot(bean: bean)] { context.insert(shot) }
+        try context.save()
+
+        ShotReassignment.deleteBean(bean, in: context, settings: settings)
+
+        #expect(try beanNames() == ["Unknown"])
+        #expect(unknown.shots.count == 3)
+        #expect(settings.nextBagNumber == 3)
+    }
+
+    @Test func deletingTheUnknownBeanDeletesItsShots() throws {
+        let unknown = Bean.quickAdd(name: "", bagNumber: 1)
+        let other = fullBean("Black Gold", bag: 2)
+        for b in [unknown, other] { context.insert(b) }
+        for shot in [Shot(bean: unknown), Shot(bean: unknown), Shot(bean: other)] { context.insert(shot) }
+        try context.save()
+
+        ShotReassignment.deleteBean(unknown, in: context, settings: nil)
+
+        #expect(try beanNames() == ["Black Gold"])
+        #expect(try context.fetchCount(FetchDescriptor<Shot>()) == 1)
+    }
+
+    @Test func deletingAnEmptyBeanAddsNoUnknown() throws {
+        let settings = AppSettings(nextBagNumber: 2)
+        let bean = fullBean("Black Gold", bag: 1)
+        context.insert(settings)
+        context.insert(bean)
+        try context.save()
+
+        ShotReassignment.deleteBean(bean, in: context, settings: settings)
+
+        #expect(try beanNames().isEmpty)
+        #expect(settings.nextBagNumber == 2)
+    }
+
+    /// The relationship itself is `.nullify`, so even a direct delete keeps shots.
+    @Test func aDirectDeleteNeverTakesShots() throws {
+        let bean = fullBean("Black Gold", bag: 1)
+        context.insert(bean)
+        context.insert(Shot(bean: bean))
+        try context.save()
+
+        context.delete(bean)
+        try context.save()
+
+        #expect(try context.fetchCount(FetchDescriptor<Shot>()) == 1)
     }
 }
 

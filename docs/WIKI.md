@@ -14,7 +14,7 @@ The working reference for anyone (human or agent) touching this repo. DESIGN.md 
 | Bundle ID | `com.badc0ffe.pullstate` |
 | Team | ZWS3TP3W3Z |
 | Repo | github.com/xbadc0ffe/pull-state (MIT) |
-| Current release | 1.4 (App Store) → 1.5 on TestFlight |
+| Current release | 1.4 (App Store) → 26.1.5 on TestFlight (version scheme: §5) |
 | Tip-jar IAP | `com.badc0ffe.pullstate.tip`, non-consumable, nothing gated |
 
 ---
@@ -99,11 +99,12 @@ xcodebuild build -scheme "Pull State" -destination 'generic/platform=iOS' CODE_S
 xcodebuild test -scheme "Pull State" -destination 'platform=iOS Simulator,name=iPhone 17' -collect-test-diagnostics never
 
 # archive, sign with the ASC API key and upload to TestFlight
-ship "Pull State" 1.5          # ~/bin/ship; pulls first, build number = timestamp
+ship "Pull State" 26.1.5       # ~/bin/ship; pulls first, build number = timestamp
 ```
 
 - Build number (`CURRENT_PROJECT_VERSION`) is a `YYYYMMDDHHMM` timestamp set by `ship`.
 - Marketing version is passed to `ship` **and** should be bumped in `project.pbxproj` so the repo matches TestFlight.
+- Marketing versions are `<YY>.<major>.<minor>` from 26.1.5 on (1.0–1.4 were plain `1.x`). `YY` is the last two digits of the year the release ships. `major` goes up only for major updates and never resets, not even on a new year. `minor` goes up for every other release and goes back to 0 when `major` goes up: 26.1.5 → 26.1.6 → 26.2.0 → 27.2.1. The App Store compares versions number by number (26.1.10 is above 26.1.9) and only needs each release to be higher than the live one, which this scheme always is; once a 26.x release is live, no 1.x version can be submitted again. The user picks each version.
 - Signing is automatic with the App Store Connect API key (`~/.asc_env`, `~/ExportOptions.plist`). Never sign in with an Apple ID on the server.
 - Archives land in `~/Archives`; prune when disk is tight.
 - If signing fails with a keychain error the login keychain is locked: `security unlock-keychain ~/Library/Keychains/login.keychain-db`.
@@ -121,7 +122,7 @@ The shared scheme already selects `PullState.storekit` (Run → Options → Stor
 | 1.2 | Full-width scroll, editable photo headers, paper-filter filter, light/dark icons |
 | 1.3 | Data protection entitlement, pre-infusion pressure, recipe-prompt toggle, slider scroll passthrough |
 | 1.4 | Pre-infusion pressure slider range, pull pressure label, Restore Purchases, version read from bundle |
-| 1.5 | Documentation pass (audit, wiki, CLAUDE.md), then the audit cleanup: Log state survives tab switches, °F recipe fix, notes no longer select-all, downscaled + cached photos, StoreKit transaction listener, Dynamic Type, accessibility, iOS-only build config, Swift 6, unit tests. Then (30 Oct) logging without setup: Source rows always shown and pulsing until set up, "+ New …" in every picker, hardware optional, bean named at save time (blank = "Unknown"); re-filing shots later (Shot edit with None / + New / grind, History Select → bulk edit, backfill offer when hardware is added, empty "Unknown" bean tidied away); About → Export shots (CSV) and Wipe Data (three scopes, double confirmation). Then (1 Nov, TestFlight feedback on build 202610302343): Export Shots became a row under Recipe Suggestions that asks first and shares a real `.csv` file, Wipe Data moved right under it; the Wipe Data crash (deleted hardware's photo read during a redraw) fixed via the display-safe `photo`; sub-page top bars 1.5× larger, with Cancel replacing Back while editing |
+| 26.1.5 | First release on the `<YY>.<major>.<minor>` scheme; its first TestFlight builds (202610302343, 202611012216) were labelled 1.5. Documentation pass (audit, wiki, CLAUDE.md), then the audit cleanup: Log state survives tab switches, °F recipe fix, notes no longer select-all, downscaled + cached photos, StoreKit transaction listener, Dynamic Type, accessibility, iOS-only build config, Swift 6, unit tests. Then (30 Oct) logging without setup: Source rows always shown and pulsing until set up, "+ New …" in every picker, hardware optional, bean named at save time (blank = "Unknown"); re-filing shots later (Shot edit with None / + New / grind, History Select → bulk edit, backfill offer when hardware is added, empty "Unknown" bean tidied away); About → Export shots (CSV) and Wipe Data (three scopes, double confirmation). Then (1 Nov, TestFlight feedback on build 202610302343): Export Shots became a row under Recipe Suggestions that asks first and shares a real `.csv` file, Wipe Data moved right under it; the Wipe Data crash (deleted hardware's photo read during a redraw) fixed via the display-safe `photo`; sub-page top bars 1.5× larger, with Cancel replacing Back while editing. Then (4 Nov): renamed 1.5 → 26.1.5; About gained a **Website** row (badc0ffe.net) between Built by and Contact |
 
 ---
 
@@ -151,4 +152,4 @@ The shared scheme already selects `PullState.storekit` (Run → Options → Stor
 
 ## 8. Deferred (V2) — do not build without scoping
 
-Barcode scanning, AI shot diagnosis, iCloud sync, Home Screen widget, share-as-image, cross-bean charts. See DESIGN.md §17. (CSV export shipped in 1.5.)
+Barcode scanning, AI shot diagnosis, iCloud sync, Home Screen widget, share-as-image, cross-bean charts. See DESIGN.md §17. (CSV export shipped in 26.1.5.)

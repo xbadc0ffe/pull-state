@@ -2,9 +2,10 @@ import SwiftUI
 import SwiftData
 
 /// About sheet presented from any tab's "…" icon. Houses the settings card
-/// (Built by / Contact / GitHub / Temperature / Appearance / Recipe
-/// Suggestions, then an Export Shots row), the red Wipe Data button, the
-/// non-consumable tip-jar IAP and a footer tagline. Export Shots asks
+/// (Built by / Website / Contact / GitHub / Temperature / Appearance /
+/// Recipe Suggestions, then an Export Shots row), the red Wipe Data
+/// button, the non-consumable tip-jar IAP and a footer tagline. Website
+/// and GitHub are `Link`s that open in Safari. Export Shots asks
 /// "Export N shots as a CSV table?" and then shares a real `.csv` file
 /// (`ShotCSV.writeFile` + `ShareSheetPresenter`); Wipe Data picks a
 /// `WipeScope`, then asks twice. The app-wide `StoreManager` (from the
@@ -66,6 +67,9 @@ struct AboutSheet: View {
                         PSField(label: "Built by") {
                             PSValueText(text: "badc0ffe", fontSize: 13)
                         }
+                        PSField(label: "Website") {
+                            linkValue("badc0ffe.net", to: "https://badc0ffe.net")
+                        }
                         PSField(label: "Contact") {
                             Text("info@badc0ffe.net")
                                 .font(PSFont.mono(13, weight: .semibold))
@@ -74,16 +78,7 @@ struct AboutSheet: View {
                                 .minimumScaleFactor(0.8)
                         }
                         PSField(label: "GitHub") {
-                            if let url = URL(string: "https://github.com/xbadc0ffe/pull-state") {
-                                Link(destination: url) {
-                                    Text("github.com/xbadc0ffe/pull-state")
-                                        .font(PSFont.mono(13, weight: .semibold))
-                                        .foregroundStyle(palette.accent)
-                                        .underline()
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.65)
-                                }
-                            }
+                            linkValue("github.com/xbadc0ffe/pull-state", to: "https://github.com/xbadc0ffe/pull-state")
                         }
                         PSField(label: "Temperature") {
                             TempUnitSwitch(unit: Binding(
@@ -271,6 +266,24 @@ struct AboutSheet: View {
         guard !settings.hasTipped else { return }
         settings.hasTipped = true
         try? context.save()
+    }
+
+    // MARK: - Links
+
+    /// Accent, underlined row value that opens `address` in Safari
+    /// (Website, GitHub).
+    @ViewBuilder
+    private func linkValue(_ text: String, to address: String) -> some View {
+        if let url = URL(string: address) {
+            Link(destination: url) {
+                Text(text)
+                    .font(PSFont.mono(13, weight: .semibold))
+                    .foregroundStyle(palette.accent)
+                    .underline()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+            }
+        }
     }
 
     // MARK: - Export Shots

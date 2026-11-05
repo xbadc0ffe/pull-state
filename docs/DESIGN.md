@@ -188,7 +188,7 @@ Presented from any tab via the `…` (ellipsis) icon in the top-right of the nav
 - App logo — `Image("badc0ffe-logo")` from the asset catalog, capped at 160 pt wide
 - Title "Pull State"
 - Version line "v {CFBundleShortVersionString}", read from the bundle at runtime
-- Card with rows: **Built by** (badc0ffe), **Contact** (info@badc0ffe.net), **GitHub** (tappable `Link` to `https://github.com/xbadc0ffe/pull-state`, accent-colored + underlined), **Temperature** (Celsius / Fahrenheit switch — see §11.1), **Appearance** (System / Light / Dark switch), **Recipe Suggestions** (toggle for the post-save prompts, §3.1), **Export Shots** (share icon in place of a toggle; asks first, then opens the share sheet — §10.3)
+- Card with rows: **Built by** (badc0ffe), **Website** (tappable `Link` to `https://badc0ffe.net`, shown as badc0ffe.net), **Contact** (info@badc0ffe.net), **GitHub** (tappable `Link` to `https://github.com/xbadc0ffe/pull-state`; both links accent-colored + underlined, via the sheet's `linkValue` helper), **Temperature** (Celsius / Fahrenheit switch — see §11.1), **Appearance** (System / Light / Dark switch), **Recipe Suggestions** (toggle for the post-save prompts, §3.1), **Export Shots** (share icon in place of a toggle; asks first, then opens the share sheet — §10.3)
 - Red-outlined **Wipe Data** button directly under the card — §10.3
 - **Tip jar** and **Restore Purchases** — see §10
 - Footer copy block on `surfaceAlt` background
@@ -302,7 +302,7 @@ Computed:
 
 `@Attribute(.externalStorage)` keeps photo blobs out of the main SQLite file, so the DB stays small even with many photos.
 
-The references to Bean/Machine/Grinder are optional — a hardware item can be deleted without orphaning the shot's data. Since 1.5 `machine` and `grinder` can also be nil from the moment a shot is logged (no hardware set up yet); they are filled in later through Shot edit, History's bulk edit, or the backfill offer when hardware is added (§3.4). The Log screen always sets `bean` (creating one via the name prompt if needed), so in practice only legacy data could have a nil bean; the UI shows such a shot as "Unknown" without a bag number.
+The references to Bean/Machine/Grinder are optional — a hardware item can be deleted without orphaning the shot's data. Since 26.1.5 `machine` and `grinder` can also be nil from the moment a shot is logged (no hardware set up yet); they are filled in later through Shot edit, History's bulk edit, or the backfill offer when hardware is added (§3.4). The Log screen always sets `bean` (creating one via the name prompt if needed), so in practice only legacy data could have a nil bean; the UI shows such a shot as "Unknown" without a bag number.
 
 `usedPaperFilter` records whether the user pulled the shot through a paper filter (e.g. AeroPress disk in a portafilter, paper basket disk). It is a per-shot decision, not a recipe parameter — `Recipe` carries no equivalent field. The Log screen and the Shot-edit screen both place the toggle at the **bottom** of the Settings card (below Pull Pressure); Log preserves the toggle's value across saves (matching how dose/yield/temp/pressure are preserved). The History filter sheet exposes it as a three-state filter (Any / With Filter / Without Filter, backed by an optional `Bool?` binding). The Shot detail's Numbers card surfaces a `Paper Filter: Yes` row only when the value is `true`.
 
@@ -556,7 +556,7 @@ Layout (top to bottom):
 
 1. App logo — `Image("badc0ffe-logo")` from the asset catalog (max 160 pt wide, `.scaledToFit()`)
 2. Title "Pull State" + version line read from `CFBundleShortVersionString`
-3. Identity card — Built by, Contact, GitHub (tappable `Link`), **Temperature** (Celsius/Fahrenheit `TempUnitSwitch`), **Appearance** (System/Light/Dark `ModeSwitch`), **Recipe Suggestions** (toggle), **Export Shots** (§10.3)
+3. Identity card — Built by, Website (tappable `Link` to badc0ffe.net), Contact, GitHub (tappable `Link`), **Temperature** (Celsius/Fahrenheit `TempUnitSwitch`), **Appearance** (System/Light/Dark `ModeSwitch`), **Recipe Suggestions** (toggle), **Export Shots** (§10.3)
 4. **Wipe Data** button (§10.3)
 5. Tip jar (see below)
 6. Tagline footer on `surfaceAlt`
@@ -788,7 +788,7 @@ Per `CLAUDE.md`, **not** in v1 — do not implement until explicitly scoped:
 - Share-shot-as-image card
 - Rating trend charts beyond the per-bean sparkline
 
-These are deliberate omissions, not unbuilt features. The data model and architecture leave room for each: `Bean.ratingTrend` is the seed for richer charts; the on-device-only model is what makes iCloud sync a v2 add rather than a refactor. (CSV export of shot history was on this list until it was requested for 1.5; it now lives on the About sheet, §10.3.)
+These are deliberate omissions, not unbuilt features. The data model and architecture leave room for each: `Bean.ratingTrend` is the seed for richer charts; the on-device-only model is what makes iCloud sync a v2 add rather than a refactor. (CSV export of shot history was on this list until it was requested for 26.1.5; it now lives on the About sheet, §10.3.)
 
 ---
 

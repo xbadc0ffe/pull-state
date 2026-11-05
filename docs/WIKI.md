@@ -37,6 +37,8 @@ pull-state/
 └── design/                   the original Claude Design prototype (one handoff zip: HTML + JSX)
 ```
 
+Notes about a particular machine (build server, ship script, local paths) go in a git-ignored `CLAUDE.local.md` next to `CLAUDE.md`, not in the committed docs.
+
 ### Source tree (`Pull State/`)
 
 | Folder | Contents |
@@ -88,7 +90,7 @@ Read DESIGN.md §2–§6 before changing navigation, the data model, the recipe-
 
 ## 5. Build & ship
 
-Work is written on Windows, pushed to GitHub, and built on the headless Mac mini over SSH.
+Building needs Xcode on macOS.
 
 ```bash
 # compile-only sanity check (no signing)
@@ -97,17 +99,12 @@ xcodebuild build -scheme "Pull State" -destination 'generic/platform=iOS' CODE_S
 # unit tests on the simulator (LiveDeleteTests also opens real windows in the test host;
 # -collect-test-diagnostics never stops a crashing test from hanging the run)
 xcodebuild test -scheme "Pull State" -destination 'platform=iOS Simulator,name=iPhone 17' -collect-test-diagnostics never
-
-# archive, sign with the ASC API key and upload to TestFlight
-ship "Pull State" <version>    # ~/bin/ship; the next minor, e.g. 26.1.6. Pulls first; build number = timestamp
 ```
 
-- Build number (`CURRENT_PROJECT_VERSION`) is a `YYYYMMDDHHMM` timestamp set by `ship`.
-- Marketing version is passed to `ship` **and** should be bumped in `project.pbxproj` so the repo matches TestFlight.
-- Marketing versions are `<YY>.<major>.<minor>` from 26.1.5 on (1.0–1.4 were plain `1.x`). `YY` is the last two digits of the year the release ships. `major` goes up only for major updates and never resets, not even on a new year. `minor` goes up by one on every TestFlight or App Store upload and goes back to 0 when `major` goes up: 26.1.5 → 26.1.6 → 26.2.0 → 27.2.1. The App Store compares versions number by number (26.1.10 is above 26.1.9) and only needs each release to be higher than the live one, which this scheme always is; once a 26.x release is live, no 1.x version can be submitted again. Bump `minor` in `project.pbxproj` in the commit being shipped and pass the same version to `ship`; only a `major` bump needs the user's go-ahead. 26.1.5 was uploaded twice (builds 202611041742 and 202611041806) before this rule, so 26.1.6 is next. Since every build has its own version, an App Store submission uses the version of the build picked for it. TestFlight has only the internal group, so a new version needs no beta review.
-- Signing is automatic with the App Store Connect API key (`~/.asc_env`, `~/ExportOptions.plist`). Never sign in with an Apple ID on the server.
-- Archives land in `~/Archives`; prune when disk is tight.
-- If signing fails with a keychain error the login keychain is locked: `security unlock-keychain ~/Library/Keychains/login.keychain-db`.
+- Releases are archived, signed with an App Store Connect API key and uploaded to TestFlight by the maintainer's release script, which is not part of this repo.
+- Build number (`CURRENT_PROJECT_VERSION`) is a `YYYYMMDDHHMM` timestamp set by the release script.
+- Marketing version is passed to the release script **and** should be bumped in `project.pbxproj` so the repo matches TestFlight.
+- Marketing versions are `<YY>.<major>.<minor>` from 26.1.5 on (1.0–1.4 were plain `1.x`). `YY` is the last two digits of the year the release ships. `major` goes up only for major updates and never resets, not even on a new year. `minor` goes up by one on every TestFlight or App Store upload and goes back to 0 when `major` goes up: 26.1.5 → 26.1.6 → 26.2.0 → 27.2.1. The App Store compares versions number by number (26.1.10 is above 26.1.9) and only needs each release to be higher than the live one, which this scheme always is; once a 26.x release is live, no 1.x version can be submitted again. Bump `minor` in `project.pbxproj` in the commit being shipped and pass the same version to the release script; only a `major` bump needs the user's go-ahead. 26.1.5 was uploaded twice (builds 202611041742 and 202611041806) before this rule, so 26.1.6 is next. Since every build has its own version, an App Store submission uses the version of the build picked for it. TestFlight has only the internal group, so a new version needs no beta review.
 
 The shared scheme already selects `PullState.storekit` (Run → Options → StoreKit Configuration), so the tip jar works in the Simulator.
 
@@ -144,7 +141,7 @@ The shared scheme already selects `PullState.storekit` (Run → Options → Stor
 | Wipe Data | `Utilities/DataWiper.swift`, `AboutSheet` Wipe Data button (DESIGN.md §10.3; UI-level tests in `LiveDeleteTests`) |
 | A crash reading a photo after a delete | `Models/PersistentModel+Detached.swift`; show photos via `photo` (DESIGN.md §4.1) |
 | Top bar sizes and layout (tabs and sub-pages) | `Views/Components/PSNavBar.swift` (`PSNavMetrics`, DESIGN.md §5.3) |
-| Reading TestFlight crash reports on this server | App Store Connect API with the `ship` key: `GET /v1/apps/{id}/betaFeedbackCrashSubmissions`, then `/v1/betaFeedbackCrashSubmissions/{id}/crashLog` (already symbolicated). Pull State's app id is 6765922700 |
+| Reading TestFlight crash reports | App Store Connect API: `GET /v1/apps/{id}/betaFeedbackCrashSubmissions`, then `/v1/betaFeedbackCrashSubmissions/{id}/crashLog` (already symbolicated). Pull State's app id is 6765922700 |
 | Hardware autocomplete list | `Utilities/HardwareCatalog.swift` |
 | IAP | `Utilities/StoreManager.swift`, `AboutSheet`, `PullState.storekit` |
 | Privacy / App Store compliance | `PrivacyInfo.xcprivacy`, entitlements, `INFOPLIST_KEY_*` in pbxproj, `docs/privacy.html` |

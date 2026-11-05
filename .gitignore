@@ -1,6 +1,7 @@
 # Personal / agent files
 prompts/
 .claude/
+CLAUDE.local.md
 
 # macOS
 .DS_Store

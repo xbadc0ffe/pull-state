@@ -3,9 +3,9 @@
 iOS/iPadOS espresso logbook. SwiftUI + SwiftData, single target, no dependencies, local-only data. Read `docs/WIKI.md` first (layout, conventions, ship flow); `docs/DESIGN.md` is the behaviour spec; the newest `docs/AUDIT-*.md` is the open backlog.
 
 ## Working here
-- Code is authored on Windows and pushed; this Mac mini only builds and ships. Always `git pull --ff-only` before building.
-- Compile check: `xcodebuild build -scheme "Pull State" -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO`
-- Ship: `ship "Pull State" <marketing-version>` (see `~/bin/ship`). Versions are `<YY>.<major>.<minor>` (WIKI.md §5). Every TestFlight/App Store upload gets the next minor version: bump `MARKETING_VERSION` in `Pull State.xcodeproj/project.pbxproj` (e.g. 26.1.5 → 26.1.6) in the commit being shipped and pass the same version to `ship`. Major bumps are the user's call.
+- Machine-specific notes (build machine, ship script, local paths) go in the git-ignored `CLAUDE.local.md`, never in this file or the docs.
+- Compile check (needs Xcode on macOS): `xcodebuild build -scheme "Pull State" -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO`
+- Versions are `<YY>.<major>.<minor>` (WIKI.md §5). Every TestFlight/App Store upload gets the next minor version: bump `MARKETING_VERSION` in `Pull State.xcodeproj/project.pbxproj` (e.g. 26.1.5 → 26.1.6) in the commit being shipped and upload that same version. Major bumps are the user's call.
 - Commit messages follow the existing style: `v<version> <short summary>` for release passes (e.g. `v26.1.5 …`; older commits say `v1.x`), imperative otherwise.
 
 ## Code rules

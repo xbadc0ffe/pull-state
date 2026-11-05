@@ -99,12 +99,12 @@ xcodebuild build -scheme "Pull State" -destination 'generic/platform=iOS' CODE_S
 xcodebuild test -scheme "Pull State" -destination 'platform=iOS Simulator,name=iPhone 17' -collect-test-diagnostics never
 
 # archive, sign with the ASC API key and upload to TestFlight
-ship "Pull State" 26.1.5       # ~/bin/ship; pulls first, build number = timestamp
+ship "Pull State" <version>    # ~/bin/ship; the next minor, e.g. 26.1.6. Pulls first; build number = timestamp
 ```
 
 - Build number (`CURRENT_PROJECT_VERSION`) is a `YYYYMMDDHHMM` timestamp set by `ship`.
 - Marketing version is passed to `ship` **and** should be bumped in `project.pbxproj` so the repo matches TestFlight.
-- Marketing versions are `<YY>.<major>.<minor>` from 26.1.5 on (1.0–1.4 were plain `1.x`). `YY` is the last two digits of the year the release ships. `major` goes up only for major updates and never resets, not even on a new year. `minor` goes up for every other release and goes back to 0 when `major` goes up: 26.1.5 → 26.1.6 → 26.2.0 → 27.2.1. The App Store compares versions number by number (26.1.10 is above 26.1.9) and only needs each release to be higher than the live one, which this scheme always is; once a 26.x release is live, no 1.x version can be submitted again. The user picks each version.
+- Marketing versions are `<YY>.<major>.<minor>` from 26.1.5 on (1.0–1.4 were plain `1.x`). `YY` is the last two digits of the year the release ships. `major` goes up only for major updates and never resets, not even on a new year. `minor` goes up by one on every TestFlight or App Store upload and goes back to 0 when `major` goes up: 26.1.5 → 26.1.6 → 26.2.0 → 27.2.1. The App Store compares versions number by number (26.1.10 is above 26.1.9) and only needs each release to be higher than the live one, which this scheme always is; once a 26.x release is live, no 1.x version can be submitted again. Bump `minor` in `project.pbxproj` in the commit being shipped and pass the same version to `ship`; only a `major` bump needs the user's go-ahead. 26.1.5 was uploaded twice (builds 202611041742 and 202611041806) before this rule, so 26.1.6 is next. Since every build has its own version, an App Store submission uses the version of the build picked for it. TestFlight has only the internal group, so a new version needs no beta review.
 - Signing is automatic with the App Store Connect API key (`~/.asc_env`, `~/ExportOptions.plist`). Never sign in with an Apple ID on the server.
 - Archives land in `~/Archives`; prune when disk is tight.
 - If signing fails with a keychain error the login keychain is locked: `security unlock-keychain ~/Library/Keychains/login.keychain-db`.

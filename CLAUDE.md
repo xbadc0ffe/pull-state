@@ -5,7 +5,7 @@ iOS/iPadOS espresso logbook. SwiftUI + SwiftData, single target, no dependencies
 ## Working here
 - Code is authored on Windows and pushed; this Mac mini only builds and ships. Always `git pull --ff-only` before building.
 - Compile check: `xcodebuild build -scheme "Pull State" -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO`
-- Ship: `ship "Pull State" <marketing-version>` (see `~/bin/ship`). The user chooses the marketing version; bump `MARKETING_VERSION` in `Pull State.xcodeproj/project.pbxproj` to match in the same commit. Versions are `<YY>.<major>.<minor>` (e.g. 26.1.5; WIKI.md §5).
+- Ship: `ship "Pull State" <marketing-version>` (see `~/bin/ship`). Versions are `<YY>.<major>.<minor>` (WIKI.md §5). Every TestFlight/App Store upload gets the next minor version: bump `MARKETING_VERSION` in `Pull State.xcodeproj/project.pbxproj` (e.g. 26.1.5 → 26.1.6) in the commit being shipped and pass the same version to `ship`. Major bumps are the user's call.
 - Commit messages follow the existing style: `v<version> <short summary>` for release passes (e.g. `v26.1.5 …`; older commits say `v1.x`), imperative otherwise.
 
 ## Code rules

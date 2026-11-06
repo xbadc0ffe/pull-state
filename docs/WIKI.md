@@ -32,6 +32,7 @@ pull-state/
 │   ├── DESIGN.md             full design + behaviour spec (screens, data model, timer, IAP)
 │   ├── WIKI.md               this file
 │   ├── AUDIT-YYYY-MM-DD.md   dated audit reports; newest is the open backlog
+│   ├── PLAN-*.md             proposed features not built yet (open questions inside)
 │   └── privacy.html          privacy policy published via GitHub Pages
 ├── branding/                 app icon sources (light/dark) and the badc0ffe logo
 └── design/                   the original Claude Design prototype (one handoff zip: HTML + JSX)
